@@ -19,6 +19,11 @@ import { RedeemOnAssetChain } from '../components/CrossChainCollateral';
 import { Asset, AssetStack } from '../components/AssetIcon';
 import { StatePill, currentState } from '../components/NoteState';
 import { Addr } from '../components/ui';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useDemoHolder } from '../lib/demo';
+import { useToast } from '../components/Toast';
+import { BarrierBar } from '../components/BarrierBar';
+import { marksOf, plainName, statusOf, CALM_LABEL } from '../lib/story';
 
 type Tab = 'wallet' | 'subscribed' | 'issued' | 'collateral' | 'paid' | 'claim';
 
@@ -29,11 +34,15 @@ export default function Portfolio() {
   const connected = useAddress();
   const [params] = useSearchParams();
   const override = params.get('address');
-  const address = override && isAddress(override) ? override.toLowerCase() : connected;
+  const chosen = override && isAddress(override) ? override.toLowerCase() : connected;
+  // No wallet: preview the page with a real investor's wallet from the live notes, read-only and labelled.
+  const demo = useDemoHolder(!chosen);
+  const address = chosen ?? demo;
   const readOnly = !!address && address !== connected;
   const nav = useNavigate();
   const { byKey } = useChains();
   const signer = useSigner();
+  const toast = useToast();
   const { positions, payouts, refresh } = usePortfolio(address ?? undefined);
   const { notes } = useNotes({ status: 'all' });
   const { data: wallet, refresh: refreshWallet } = useWalletBalances(address);
@@ -42,7 +51,11 @@ export default function Portfolio() {
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string; tx?: string; explorer?: string } | null>(null);
 
   const subscribed = useMemo(
-    () => (positions ?? []).filter((p) => p.position.units > 0 && p.view.issuer.toLowerCase() !== address),
+    () =>
+      (positions ?? [])
+        .filter((p) => p.view.issuer.toLowerCase() !== address)
+        .filter((p) => p.position.units > 0 || p.position.cash > 0 || p.position.holdings.length > 0)
+        .sort((a, b) => Number(b.position.units > 0) - Number(a.position.units > 0)),
     [positions, address],
   );
   const issued = useMemo(() => (notes ?? []).filter((n) => n.view.issuer.toLowerCase() === address), [notes, address]);
@@ -76,9 +89,7 @@ export default function Portfolio() {
       <main className="page">
         <div className="empty">
           <strong>Connect a wallet to see your portfolio.</strong>
-          <span className="small">
-            Your assets on Robinhood Chain and Base testnets, the notes you hold or issued, and what you can claim.
-          </span>
+          <span className="small">Looking for a demo wallet to show you meanwhile…</span>
           <Link to="/" className="btn">
             Browse notes
           </Link>
@@ -139,6 +150,7 @@ export default function Portfolio() {
       throw new Error(
         `${sym} refused the transfer to your wallet: what ${p.view.name} owes you stays claimable. Try again later.`,
       );
+    toast({ tone: 'coin', title: `Claimed ${fmtMoney(cash)} ${sym}`, body: `From ${p.view.name}, with a receipt.` });
     if (!quiet)
       setMsg({
         kind: 'ok',
@@ -188,7 +200,7 @@ export default function Portfolio() {
   };
 
   const tabs: Array<{ id: Tab; label: string; icon: ReactNode; n?: number; flag?: boolean }> = [
-    { id: 'subscribed', label: 'Subscribed notes', icon: <FileText className="i" />, n: subscribed.length },
+    { id: 'subscribed', label: 'Notes you hold', icon: <FileText className="i" />, n: subscribed.length },
     { id: 'issued', label: 'Issued notes', icon: <Landmark className="i" />, n: issued.length, flag: due.length > 0 },
     { id: 'paid', label: 'Paid to your wallet', icon: <BadgeCheck className="i" />, n: payouts?.length },
     {
@@ -208,7 +220,9 @@ export default function Portfolio() {
         <div>
           <h1>Portfolio</h1>
           <p>
-            {readOnly ? (
+            {demo && address === demo ? (
+              <>What your portfolio looks like: a real investor's wallet from the live notes, read-only.</>
+            ) : readOnly ? (
               <>
                 Viewing <Addr value={address} /> read-only.
               </>
@@ -229,6 +243,21 @@ export default function Portfolio() {
           Refresh
         </button>
       </div>
+      {demo && address === demo && (
+        <div className="notice info demo-banner" role="note" data-demo-wallet={demo}>
+          <span>
+            <b>Demo view.</b> This is investor wallet <Addr value={demo} /> on testnet, shown read-only so you can see
+            how positions, payouts and claims look. Connect a wallet to see your own.
+          </span>
+          <ConnectButton.Custom>
+            {({ openConnectModal }) => (
+              <button type="button" className="btn primary sm" onClick={openConnectModal}>
+                Connect a wallet
+              </button>
+            )}
+          </ConnectButton.Custom>
+        </div>
+      )}
       {msg && (
         <div className={`notice ${msg.kind}`} role="status">
           {msg.text}{' '}
@@ -280,45 +309,56 @@ export default function Portfolio() {
             }
           />
         ) : (
-          <div className="card scroll-x p-0">
-            <table className="t">
-              <thead>
-                <tr>
-                  <th>Note</th>
-                  <th>Underlying</th>
-                  <th>State</th>
-                  <th className="r">Units</th>
-                  <th className="r">Paid so far</th>
-                  <th>Next</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subscribed.map((p) => {
-                  const sym = cashSymbol(byKey[p.chain]?.cfg, p.view.cashToken);
-                  const paid = p.view.outcome ? p.view.outcome.perUnit * p.position.units : null;
-                  return (
-                    <tr key={p.id} {...rowProps(p.id, p.view.name)} data-note={p.id}>
-                      <td>
-                        <strong>{p.view.name}</strong>
-                        <div className="xs muted">
-                          {byKey[p.chain]?.cfg.name ?? p.chain}
-                          {earlier(p.id)}
-                        </div>
-                      </td>
-                      <td>
-                        <AssetStack syms={symsOf(p.view)} />
-                      </td>
-                      <td>
-                        <StatePill o={p.view} />
-                      </td>
-                      <td className="r num">{fmtMoney(p.position.units, 0)}</td>
-                      <td className="r num">{paid === null ? '—' : `${fmtMoney(paid)} ${sym}`}</td>
-                      <td className="small muted">{nextEvent(p.view)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="pf-cards">
+            {subscribed.map((p) => {
+              const sym = cashSymbol(byKey[p.chain]?.cfg, p.view.cashToken);
+              const paid = p.view.outcome ? p.view.outcome.perUnit * p.position.units : null;
+              const st = statusOf(p.view, sym);
+              const done = st.key !== 'open' && st.key !== 'running';
+              const claimable = cashOf(p);
+              return (
+                <div key={p.id} {...rowProps(p.id, p.view.name)} className="card pf-card link" data-note={p.id}>
+                  <div className="pf-card-top">
+                    <AssetStack syms={symsOf(p.view)} size={24} label={false} />
+                    <div>
+                      <strong>{p.view.hasTerms ? plainName(p.view.params) : p.view.name}</strong>
+                      <div className="xs muted">
+                        {byKey[p.chain]?.cfg.name ?? p.chain}
+                        {earlier(p.id)}
+                      </div>
+                    </div>
+                    {done ? (
+                      <span className={`nc-done c-${st.key}`}>{CALM_LABEL[st.key]}</span>
+                    ) : (
+                      <StatePill o={p.view} />
+                    )}
+                  </div>
+                  <dl className="ns-kv">
+                    <div>
+                      <dt>Units</dt>
+                      <dd className="num">{fmtMoney(p.position.units, 0)}</dd>
+                    </div>
+                    <div>
+                      <dt>Paid so far</dt>
+                      <dd className="num">{paid === null || !p.position.units ? '—' : `${fmtMoney(paid)} ${sym}`}</dd>
+                    </div>
+                    <div>
+                      <dt>Waiting to be claimed</dt>
+                      <dd className="num">
+                        {fmtMoney(claimable)} {sym}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Next</dt>
+                      <dd className="small">{done ? 'Finished' : nextEvent(p.view)}</dd>
+                    </div>
+                  </dl>
+                  {p.view.hasTerms && (
+                    <BarrierBar p={p.view.params} marks={marksOf(p.view)} past={done} legend={false} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))}
 

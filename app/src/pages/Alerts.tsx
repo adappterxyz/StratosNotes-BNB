@@ -12,6 +12,60 @@ import { alertsApi, type AlertStatus } from '../lib/alerts';
 import { useAddress, useChains, useSigner } from '../lib/chains';
 import { useVerifiedEmail } from '../components/VerifiedEmail';
 import { EmailsSent } from '../components/EmailsSent';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+
+/** Without a wallet: what alerts are and an example email, then connect. */
+function AlertsPreview() {
+  return (
+    <main className="page stack" data-alerts-preview>
+      <div className="alerts-head">
+        <h1>
+          <Mail className="i" /> Email alerts
+        </h1>
+        <p className="muted small">
+          A short email when something happens to a note you hold or issued, so you never have to watch the page.
+        </p>
+      </div>
+      <div className="alerts-preview">
+        <section className="card stack gap-10">
+          <h3>You choose what to hear about</h3>
+          {NOTIFY_CATEGORIES.map((c) => (
+            <label key={c} className="row small gap-8 min-h-40">
+              <input type="checkbox" checked={c !== 'book'} disabled readOnly />
+              {NOTIFY_CATEGORY_LABEL[c]}
+            </label>
+          ))}
+          <p className="xs muted">
+            Your email is verified once and tied to your wallet on-chain; issuing and buying need it. Unsubscribe in one
+            click from any email.
+          </p>
+          <ConnectButton.Custom>
+            {({ openConnectModal }) => (
+              <button type="button" className="btn primary" onClick={openConnectModal}>
+                Connect a wallet to set up alerts
+              </button>
+            )}
+          </ConnectButton.Custom>
+        </section>
+        <section className="card mail-sample" aria-label="An example email">
+          <span className="xs muted">Example email</span>
+          <div className="mail-head">
+            <b>Coupon paid: Income while Tesla and NVIDIA hold 70%</b>
+            <span className="xs muted">notes.markets · to you</span>
+          </div>
+          <p className="small">
+            Chainlink checked Tesla and NVIDIA: the weaker one closed at 102.3% of its starting price, above the 70%
+            coupon line. A coupon of 0.025 USDG per unit was paid into the note.
+          </p>
+          <p className="small">
+            You hold 100 units: 2.50 USDG is waiting for you. Claim it from your portfolio any time.
+          </p>
+          <span className="xs muted">This is an illustration; real emails carry your note's own figures.</span>
+        </section>
+      </div>
+    </main>
+  );
+}
 
 export default function AlertsPage() {
   const address = useAddress();
@@ -58,14 +112,7 @@ export default function AlertsPage() {
     }
   };
 
-  if (!address)
-    return (
-      <main className="page">
-        <div className="empty">
-          <strong>Connect a wallet to set up email alerts.</strong>
-        </div>
-      </main>
-    );
+  if (!address) return <AlertsPreview />;
   return (
     <main className={`page alerts-page${status?.verified ? ' two' : ''}`} data-alerts>
       <div className="alerts-head">
