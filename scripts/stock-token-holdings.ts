@@ -1,7 +1,7 @@
 /**
  * How much of each note chain's real tokens the demo accounts hold, with their ETH for gas: on Robinhood Chain testnet
  * USDG (the cash leg), WETH and Robinhood's stock tokens (TSLA, AMZN, AMD, PLTR, NFLX); on Base Sepolia USDC (the cash
- * leg) and WETH. So you know whether an account must claim from a faucet (or wrap ETH) before issuing, or lock stock
+ * leg), WETH and, once deployed, notes.markets' B20 stock stand-ins (TSLAc…). So you know whether an account must claim from a faucet (or wrap ETH) before issuing, or lock stock
  * tokens on Robinhood Chain for a Base note.
  * Read-only: it reads the public addresses from .keys/*.json (never the keys) and calls balanceOf.
  * CHAINS=robinhood-testnet (or base-sepolia) limits it to one chain; RPC_ROBINHOOD_TESTNET / RPC_BASE_SEPOLIA override.
@@ -15,6 +15,7 @@ import {
   CASH_FAUCETS,
   CHAIN_TOKENS,
   GAS_FAUCETS,
+  isDeployedToken,
   NOTE_CHAIN_LABELS,
   NOTE_CHAINS,
   STOCK_TOKEN_FAUCETS,
@@ -51,7 +52,8 @@ for (const chain of chains) {
   console.log(`== ${NOTE_CHAIN_LABELS[chain]}`);
   for (const [name, who] of named) {
     const row: string[] = [`ETH ${formatUnits(await client.getBalance({ address: who }), 18)}`];
-    for (const t of Object.values(CHAIN_TOKENS[chain])) {
+    // A B20 stand-in not deployed yet (docs/BASE-STOCKS.md) has no contract to ask.
+    for (const t of Object.values(CHAIN_TOKENS[chain]).filter(isDeployedToken)) {
       const bal = await client.readContract({ address: t.address, abi: erc20, functionName: 'balanceOf', args: [who] });
       row.push(`${t.token} ${formatUnits(bal, t.decimals)}`);
     }

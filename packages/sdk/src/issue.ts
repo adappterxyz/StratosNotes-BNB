@@ -127,7 +127,7 @@ export const FIELD_LABEL: Record<string, string> = {
 /** Labels for the per-asset fields of a collateralised note (haircut_ETH, pledge_ETH, topUp_ETH, fundDelivery_ETH). */
 export function fieldLabel(name: string): string {
   if (FIELD_LABEL[name]) return FIELD_LABEL[name];
-  const m = /^(haircut|pledge|topUp|fundDelivery)_([A-Z]+)$/.exec(name);
+  const m = /^(haircut|pledge|topUp|fundDelivery)_([A-Z]+[a-z]?)$/.exec(name);
   if (m) {
     const sym = m[2] === 'USD' ? 'USDC' : `t${m[2]}`;
     return {

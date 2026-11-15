@@ -54,13 +54,18 @@ describe('two note chains: Robinhood Chain testnet and Base Sepolia', () => {
     expect(cashTokenOf({})).toEqual({ token: 'USDG', decimals: 6 });
     expect(cashTokenOf({ chain: BASE })).toEqual({ token: 'USDC', decimals: 6 });
     expect(CASH_TOKENS[BASE]).toBe('0x036CbD53842c5426634e7929541eC2318f3dCF7e');
-    expect(Object.keys(CHAIN_TOKENS[BASE]).sort()).toEqual(['USDC', 'WETH']);
+    // USDC, WETH and the B20 stock stand-ins (docs/BASE-STOCKS.md; not deployed yet).
+    expect(Object.keys(CHAIN_TOKENS[BASE]).sort()).toEqual(
+      ['AAPLc', 'AMZNc', 'METAc', 'MSFTc', 'NVDAc', 'TSLAc', 'USDC', 'WETH'].sort(),
+    );
     expect(CHAIN_TOKENS[BASE].WETH.address).toBe('0x4200000000000000000000000000000000000006');
     expect(CASH_FAUCETS[BASE]).toBe('https://faucet.circle.com');
     expect(GAS_FAUCETS[BASE].length).toBeGreaterThan(0);
     expect(collateralSymbolOfAsset('Collateral USDC')).toBe('USD');
     expect(collateralSymbolOfAsset('Collateral USDC.base')).toBe('USD');
     expect(collateralSymbolOfAsset('Collateral WETH.base')).toBe('ETH');
+    expect(collateralSymbolOfAsset('Collateral TSLAc.base')).toBe('TSLAc');
+    expect(collateralSymbolOfAsset('Collateral TSLAc')).toBe('TSLAc');
   });
 
   it('keeps a Robinhood Chain note exactly as before: no chain in its terms, USDG named after itself', () => {
@@ -72,17 +77,24 @@ describe('two note chains: Robinhood Chain testnet and Base Sepolia', () => {
     expect(withChain(p, BASE).chain).toBe(BASE);
   });
 
-  it('issues a Base note in USDC, delivering WETH; stocks settle in cash there', () => {
+  it('issues a Base note in USDC, delivering WETH; stocks wait for the B20 stand-ins', () => {
     const p: ProductParams = { ...EXAMPLE_PRODUCTS.phoenix, chain: BASE, settlement: 'physical' };
     expect(validateProductParams(p)).toEqual([]);
     expect(cashOf(p)).toMatchObject({ name: 'USDC', token: 'USDC', decimals: 6 });
     expect(instantiateProduct(p).assets.find((a) => a.id === 'd_ETH')).toMatchObject({ token: 'WETH', decimals: 18 });
     expect(instantiateProduct(p).description).toContain('subscribe in USDC');
-    expect(deliverableToken({ chain: BASE }, 'TSLA')).toBeUndefined();
+    // TSLA is delivered in the TSLAc stand-in (shares / multiplier), once it is deployed; AMD has no token on Base.
+    expect(deliverableToken({ chain: BASE }, 'TSLA')).toMatchObject({
+      token: 'TSLAc',
+      decimals: 8,
+      multiplier: { field: 'mult_TSLA' },
+    });
+    expect(deliverableToken({ chain: BASE }, 'AMD')).toBeUndefined();
     const tsla: ProductParams = { ...EXAMPLE_PRODUCTS['reverse-convertible'], chain: BASE, underlyings: [FEEDS.TSLA] };
     expect(validateProductParams(tsla)).toEqual([]);
-    expect(validateProductParams({ ...tsla, settlement: 'physical' }).join(' ')).toMatch(
-      /no TSLA token to deliver on Base Sepolia/,
+    expect(validateProductParams({ ...tsla, settlement: 'physical' }).join(' ')).toMatch(/TSLAc is not deployed yet/);
+    expect(validateProductParams({ ...tsla, underlyings: [FEEDS.AMD], settlement: 'physical' }).join(' ')).toMatch(
+      /no AMD token to deliver on Base Sepolia/,
     );
     // The same terms on two chains are two definitions.
     const rh = compileTemplate({ product: EXAMPLE_PRODUCTS.phoenix });
@@ -99,6 +111,13 @@ describe('two note chains: Robinhood Chain testnet and Base Sepolia', () => {
       { symbol: 'AMZN', token: null },
       { symbol: 'AMD', token: null },
       { symbol: 'PLTR', token: null },
+      // The B20 stand-ins (TSLAc…) are pledgeable on Base once deployed.
+      { symbol: 'TSLAc', token: null },
+      { symbol: 'AMZNc', token: null },
+      { symbol: 'NVDAc', token: null },
+      { symbol: 'AAPLc', token: null },
+      { symbol: 'MSFTc', token: null },
+      { symbol: 'METAc', token: null },
     ]);
     const p: ProductParams = {
       ...EXAMPLE_PRODUCTS.phoenix,
@@ -152,6 +171,12 @@ describe('collateral locked on the other chain, both directions', () => {
       { symbol: 'AMZN', token: 'AMZN.rh' },
       { symbol: 'AMD', token: 'AMD.rh' },
       { symbol: 'PLTR', token: 'PLTR.rh' },
+      { symbol: 'TSLAc', token: null },
+      { symbol: 'AMZNc', token: null },
+      { symbol: 'NVDAc', token: null },
+      { symbol: 'AAPLc', token: null },
+      { symbol: 'MSFTc', token: null },
+      { symbol: 'METAc', token: null },
     ]);
     expect(cashOf(p)).toMatchObject({ token: 'USDC' });
     // Valued by the stock's own Chainlink feed, like TSLA pledged on Robinhood Chain.
@@ -166,9 +191,12 @@ describe('collateral locked on the other chain, both directions', () => {
     expect(receiptChain('USDC.base')).toBe(BASE);
     expect(receiptChain('USDG')).toBeNull();
     expect(receiptChain('TSLA.arb')).toBeNull();
+    const b20 = ['AAPLc', 'AMZNc', 'METAc', 'MSFTc', 'NVDAc', 'TSLAc'].map((s) => `${s}.base`);
     expect(Object.keys(RECEIPTS).sort()).toEqual(
-      ['AMD.rh', 'AMZN.rh', 'PLTR.rh', 'TSLA.rh', 'USDC.base', 'USDG.rh', 'WETH.base', 'WETH.rh'].sort(),
+      ['AMD.rh', 'AMZN.rh', 'PLTR.rh', 'TSLA.rh', 'USDC.base', 'USDG.rh', 'WETH.base', 'WETH.rh', ...b20].sort(),
     );
+    // A Base stock locked on Base keeps its own valuation key (per-token feed), not the share's.
+    expect(RECEIPTS['TSLAc.base']).toMatchObject({ home: RH, asset: BASE, symbol: 'TSLAc' });
     expect(RECEIPTS['TSLA.rh']).toMatchObject({ home: BASE, asset: RH, symbol: 'TSLA' });
     expect(RECEIPTS['USDC.base']).toMatchObject({ home: RH, asset: BASE, symbol: 'USD' });
     expect(remoteCollateralChains(RH)).toEqual([BASE]);

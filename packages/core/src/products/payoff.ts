@@ -126,8 +126,11 @@ export interface IssuerBehaviour {
 export interface NoteScenario {
   /** Worst performance per observation (1 = at strike), as simulatePerf takes. */
   perfs: number[];
-  /** Physical settlement: the worst performer's symbol and strike at maturity (units / strike delivered). */
-  worstAtMaturity?: { symbol: string; strike: number };
+  /**
+   * Physical settlement: the worst performer's symbol and strike at maturity (units / strike delivered), and for a B20
+   * stock (TSLAc for TSLA on Base) its multiplier at maturity: units / strike / multiplier tokens.
+   */
+  worstAtMaturity?: { symbol: string; strike: number; multiplier?: number };
   sold: number;
   /** Required collateral value as a fraction of the outstanding notional. */
   ratio: number;
@@ -243,7 +246,11 @@ export function simulateNote(p: ProductParams, s: NoteScenario): NoteOutcome {
     let perUnit = coupon;
     let deliver: FundingCall['deliver'];
     if (final) {
-      if (knocked) deliver = { symbol: s.worstAtMaturity!.symbol, perUnit: 1 / s.worstAtMaturity!.strike };
+      if (knocked)
+        deliver = {
+          symbol: s.worstAtMaturity!.symbol,
+          perUnit: 1 / s.worstAtMaturity!.strike / (s.worstAtMaturity!.multiplier ?? 1),
+        };
       else perUnit += ref.redemptionCash;
     }
     if (perUnit <= 0 && !deliver) continue; // nothing due this period

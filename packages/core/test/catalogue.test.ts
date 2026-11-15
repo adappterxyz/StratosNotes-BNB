@@ -227,7 +227,21 @@ describe('the generated catalogue', () => {
   });
 
   it('keeps collateral a separate whitelist', () => {
-    expect(COLLATERAL_SYMBOLS).toEqual(['USD', 'ETH', 'TSLA', 'AMZN', 'AMD', 'PLTR']);
+    // TSLA… are Robinhood's tokens priced as shares; TSLAc… Coinbase's B20 stocks (stand-ins on Base), priced per token.
+    expect(COLLATERAL_SYMBOLS).toEqual([
+      'USD',
+      'ETH',
+      'TSLA',
+      'AMZN',
+      'AMD',
+      'PLTR',
+      'TSLAc',
+      'AMZNc',
+      'NVDAc',
+      'AAPLc',
+      'MSFTc',
+      'METAc',
+    ]);
     const p: ProductParams = {
       ...EXAMPLE_PRODUCTS.fcn,
       underlyings: [FEEDS.EUR],
