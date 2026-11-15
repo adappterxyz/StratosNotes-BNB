@@ -7,6 +7,7 @@ import OfferingPage from './pages/Offering';
 import Portfolio from './pages/Portfolio';
 import IssueWizard from './pages/IssueWizard';
 import Workspace from './pages/Workspace';
+import { useNarrow } from './lib/useNarrow';
 import AlertsPage, { AlertsConfirm, AlertsUnsubscribe } from './pages/Alerts';
 import FaucetButton, { TestnetTokens } from './components/FaucetButton';
 import { ToastProvider } from './components/Toast';
@@ -79,19 +80,6 @@ function ToolsMenu() {
       )}
     </span>
   );
-}
-
-/** True below the width where the header's extra controls fold into a menu. */
-function useNarrow(px = 1000) {
-  const q = `(max-width: ${px}px)`;
-  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(q);
-    const on = () => setNarrow(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, [q]);
-  return narrow;
 }
 
 /** The primary lockup (docs/brand/logo-guide.pdf): the payoff-note mark, "notes" in Geist Bold, a Signal-green square

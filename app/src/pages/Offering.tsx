@@ -10,6 +10,7 @@ import { isAddress } from 'viem';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Radio, ShieldCheck, WalletCards } from 'lucide-react';
 import { dec, defToBpmn, FEED_CHAIN_LABELS, instantiateProduct, isNoteChain, NOTE_CHAIN_SHORT, SCALE } from '@sn/core';
 import { CASH_ASSET, NOTE_ASSET, noteView, PHASE_LABEL, positionOf, type NoteView } from '@sn/sdk';
+import { useNarrow } from '../lib/useNarrow';
 import TasksPanel from '../components/TasksPanel';
 import EconomicsPanel from '../components/EconomicsPanel';
 import HoldersPanel from '../components/HoldersPanel';
@@ -55,6 +56,8 @@ export default function OfferingPage() {
   const emailGate = useVerifiedEmail(); // a verified email before subscribing
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('terms');
+  // On a phone the full terms start folded, so the page is not one long table.
+  const narrow = useNarrow(720);
   const me = useAddress();
   // Phases move with the clock (the book closes at the strike date) as well as with the chain.
   const o = useMemo(
@@ -275,7 +278,7 @@ export default function OfferingPage() {
             <h1>{name}</h1>
             {o.hasTerms && name !== o.name && <span className="small muted">Issued as “{o.name}”</span>}
           </div>
-          <div className="ns-status">
+          <div className="ns-status" data-phase={o.phase}>
             {st.key === 'open' || st.key === 'running' ? (
               <span className={`nc-live${st.key === 'open' ? ' open' : ''}`} data-countdown>
                 {next ? (
@@ -289,9 +292,6 @@ export default function OfferingPage() {
             ) : (
               <span className={`nc-done c-${st.key}`}>{CALM_LABEL[st.key]}</span>
             )}
-            <span className="pill plain" data-phase={o.phase} title="The note's phase on-chain">
-              {PHASE_LABEL[o.phase]}
-            </span>
             <span
               className="xs muted row gap-4"
               title="This page updates when the indexer sees anything happen to the note: a report, a subscription, a transfer."
@@ -683,7 +683,7 @@ export default function OfferingPage() {
           ))}
         </div>
         <TabPanel on={tab === 'terms'}>
-          {o.hasTerms && <FullTerms o={o} cash={sym} open />}
+          {o.hasTerms && <FullTerms o={o} cash={sym} open={!narrow} />}
           {!o.custom && (
             <div className="stack gap-6">
               <h3>Payout per 100 at the end</h3>
@@ -747,6 +747,7 @@ export default function OfferingPage() {
             )}
             <div className="adv-body small contract">
               <Row k="Network">{chain?.cfg.name ?? s.chain}</Row>
+              <Row k="Phase on-chain">{PHASE_LABEL[o.phase]}</Row>
               {noteToken && (
                 <Row k="Note token (ERC-20)">
                   <Addr value={noteToken} href={explorer ? `${explorer}/token/${noteToken}` : undefined} />
