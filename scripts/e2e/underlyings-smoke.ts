@@ -21,7 +21,8 @@ const check = (c: boolean, what: string) => {
   if (!c) ok = false;
 };
 
-await page.goto(`${APP}/issue`);
+// Issue: the network first (Robinhood Chain), then "Build your own".
+await page.goto(`${APP}/issue?chain=robinhood-testnet#wizard`);
 await page.locator('[data-product="phoenix"]').click();
 const group = page.locator('[aria-label="Underlyings"]');
 await group.waitFor();
@@ -79,7 +80,7 @@ await next();
 check(/TSLA/.test(await page.locator('main').innerText()), '?demo=tsla reaches Review & issue');
 // Phone width: browse the whole catalogue, grouped by class, without a horizontal scroll.
 await page.setViewportSize({ width: 400, height: 900 });
-await page.goto(`${APP}/issue`);
+await page.goto(`${APP}/issue?chain=robinhood-testnet#wizard`);
 await page.locator('[data-product="worst-of"]').click();
 await page.getByRole('button', { name: 'Browse all' }).click();
 for (const c of ['Stocks', 'Crypto', 'Forex', 'Commodities'])

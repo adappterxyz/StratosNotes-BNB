@@ -164,7 +164,7 @@ export function ListingRow({
 }
 
 /** Full terms with their technical names, each glossed in plain words. */
-export function FullTerms({ o, cash }: { o: NoteView; cash: string }) {
+export function FullTerms({ o, cash, open = false }: { o: NoteView; cash: string; open?: boolean }) {
   const p = o.params;
   const syms = symsOf(o);
   const rows: Array<[string, string, string]> = [
@@ -181,7 +181,11 @@ export function FullTerms({ o, cash }: { o: NoteView; cash: string }) {
       `${p.issuePricePct}% (${fmtMoney(p.issuePricePct / 100)} ${cash} per unit)`,
       'What one unit costs; each unit has 1 ' + cash + ' of face value.',
     ],
-    ['Observations', String(p.observations), 'The dates Chainlink checks the price; the last one is maturity.'],
+    [
+      'Checks (observations)',
+      String(p.observations),
+      'The dates Chainlink checks the price; the last one is the end (maturity).',
+    ],
   ];
   if (p.couponRatePct)
     rows.push([
@@ -193,19 +197,19 @@ export function FullTerms({ o, cash }: { o: NoteView; cash: string }) {
     ]);
   if (p.couponBarrierPct)
     rows.push([
-      'Coupon barrier',
+      'Coupon line (coupon barrier)',
       `${p.couponBarrierPct}% of strike${p.memory ? ', with memory' : ''}`,
       `A coupon is paid only if the price is at or above this level.${p.memory ? ' Memory: missed coupons are paid later if the price recovers.' : ''}`,
     ]);
   if (p.autocallLevelPct)
     rows.push([
-      'Autocall',
+      'Early repayment (autocall)',
       `${p.autocallLevelPct}% of strike, from observation ${p.autocallFromPeriod ?? 1}`,
       'If the price is at or above this level on a date, the note ends early and you get your money back.',
     ]);
   if (p.knockInBarrierPct)
     rows.push([
-      'Knock-in barrier',
+      'Money-back line (knock-in)',
       `${p.knockInBarrierPct}% of strike`,
       `If the price ends below this, you get back only what it is worth${p.settlement === 'physical' ? ', paid in the stock or token itself' : ''}.`,
     ]);
@@ -228,14 +232,14 @@ export function FullTerms({ o, cash }: { o: NoteView; cash: string }) {
   rows.push(['Payouts', pay.text, pay.detail]);
   if (o.isin) rows.push(['Reference (ISIN)', o.isin, "The issuer's reference for this issuance."]);
   return (
-    <details className="card adv full-terms">
+    <details className={`adv full-terms${open ? '' : ' card'}`} open={open || undefined}>
       <summary>Full terms</summary>
       <dl className="ft">
         {rows.map(([k, v, g]) => (
           <div key={k}>
             <dt>{k}</dt>
             <dd>
-              <span className="num">{v}</span>
+              <span>{v}</span>
               <span className="xs muted">{g}</span>
             </dd>
           </div>

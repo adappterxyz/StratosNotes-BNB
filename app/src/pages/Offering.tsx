@@ -1,9 +1,16 @@
-import { useMemo, useState } from 'react';
+/**
+ * A note's page, in three layers. (a) The summary: its plain name, what you get, the main risk, the barrier bar with
+ * where the underlyings stand, its status, and buying (or your position). (b) The timeline of checks and payments,
+ * and "play the note". (c) Details in tabs: full terms, collateral and payments, holders, how the workflow runs and
+ * the contract. Phone first: no wide tables in the first two layers.
+ */
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { isAddress } from 'viem';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Info, Radio, ShieldCheck, WalletCards } from 'lucide-react';
-import { dec, defToBpmn, FEED_CHAIN_LABELS, instantiateProduct, SCALE } from '@sn/core';
-import { CASH_ASSET, NOTE_ASSET, noteView, PHASE_LABEL, positionOf } from '@sn/sdk';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Radio, ShieldCheck, WalletCards } from 'lucide-react';
+import { dec, defToBpmn, FEED_CHAIN_LABELS, instantiateProduct, isNoteChain, NOTE_CHAIN_SHORT, SCALE } from '@sn/core';
+import { CASH_ASSET, NOTE_ASSET, noteView, PHASE_LABEL, positionOf, type NoteView } from '@sn/sdk';
+import { useNarrow } from '../lib/useNarrow';
 import TasksPanel from '../components/TasksPanel';
 import EconomicsPanel from '../components/EconomicsPanel';
 import HoldersPanel from '../components/HoldersPanel';
@@ -11,16 +18,32 @@ import NoteFlow from '../components/NoteFlow';
 import { useVerifiedEmail } from '../components/VerifiedEmail';
 import PayoffChart from '../components/PayoffChart';
 import { Addr, Steps, When, type StepState } from '../components/ui';
-import { plainTerms } from '../lib/plain';
 import { useAddress, useChains, useSigner, cashSymbol, entryFor } from '../lib/chains';
 import { agentLabel, errText, fmtMoney, fmtPct, fmtPrice } from '../lib/format';
 import { useDefinition, useNote, useNow } from '../lib/live';
-import { CurrentState } from '../components/NoteState';
 import { AssetIcon, AssetStack } from '../components/AssetIcon';
-import { FullTerms, Specs, YieldBlock } from '../components/Listing';
+import { FullTerms } from '../components/Listing';
 import { listingOf } from '../lib/listing';
 import { useClaimable } from '../lib/balances';
 import { useAutoReleased } from '../components/CrossChainCollateral';
+import { BarrierBar } from '../components/BarrierBar';
+import { factsOf, rateOf } from '../components/NoteCard';
+import { PlayNote } from '../components/PlayNote';
+import { useToast } from '../components/Toast';
+import {
+  CALM_LABEL,
+  countdown,
+  getLine,
+  linesOf,
+  marksOf,
+  nextCheck,
+  plainName,
+  productTag,
+  riskLine,
+  statusOf,
+} from '../lib/story';
+
+type Tab = 'terms' | 'money' | 'holders' | 'flow' | 'contract';
 
 export default function OfferingPage() {
   const { id: rawId } = useParams();
@@ -31,6 +54,10 @@ export default function OfferingPage() {
   const { byKey } = useChains();
   const signer = useSigner();
   const emailGate = useVerifiedEmail(); // a verified email before subscribing
+  const toast = useToast();
+  const [tab, setTab] = useState<Tab>('terms');
+  // On a phone the full terms start folded, so the page is not one long table.
+  const narrow = useNarrow(720);
   const me = useAddress();
   // Phases move with the clock (the book closes at the strike date) as well as with the chain.
   const o = useMemo(
@@ -58,6 +85,30 @@ export default function OfferingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [o?.custom, def],
   );
+
+  // Moments worth a beat while the page is open: a coupon paid, an early repayment.
+  const seen = useRef<{ id: string; paid: number; called: boolean } | null>(null);
+  useEffect(() => {
+    if (!o || !id) return;
+    const paid = o.outcome?.perUnit ?? 0;
+    const called = !!o.outcome?.calledAt && o.phase === 'redeemed';
+    const was = seen.current;
+    seen.current = { id, paid, called };
+    if (!was || was.id !== id) return;
+    const sym0 = cashSymbol(entryFor(byKey, note!.state)?.cfg, note!.state.assetTokens?.[1]);
+    if (called && !was.called)
+      toast({
+        tone: 'party',
+        title: 'Repaid early',
+        body: `Chainlink's check came in above the early-repayment line: holders get their money back with ${fmtMoney(paid, 4)} ${sym0} per unit in all.`,
+      });
+    else if (paid > was.paid + 1e-9)
+      toast({
+        tone: 'coin',
+        title: `Coupon paid: ${fmtMoney(paid - was.paid, 4)} ${sym0} per unit`,
+        body: 'Claim it from your portfolio any time.',
+      });
+  }, [o?.outcome?.perUnit, o?.phase, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Receipts of collateral locked on another chain: leaving the note they are burned and released on that chain.
   const autoReleased = useAutoReleased(note?.state.chain);
@@ -126,6 +177,7 @@ export default function OfferingPage() {
       try {
         const r = await adapter().subscribe(await signer(s.chain), s.id, dec(units), onStep);
         setSubStep({ approve: 'done', swap: 'done' });
+        toast({ tone: 'plain', mark: '+', title: `You're in: ${units} units`, body: 'They are in your portfolio.' });
         return r;
       } catch (e) {
         setSubStep((x) =>
@@ -160,6 +212,11 @@ export default function OfferingPage() {
         const r = await adapter().claimPayouts(await signer(s.chain), s.id, CASH_ASSET, progress);
         if (r.deferred)
           throw new Error(`${sym} refused the transfer to your wallet: it stays claimable here. Try again later.`);
+        toast({
+          tone: 'coin',
+          title: `Claimed ${fmtMoney(mine?.cash ?? 0)} ${sym}`,
+          body: 'Sent to your wallet, with a receipt.',
+        });
         return r;
       },
     );
@@ -171,70 +228,45 @@ export default function OfferingPage() {
     ? def.steps.map((x) => x.id).filter((x) => /^Task_(Fund\d+|TopUp_|FundDelivery_)/.test(x))
     : [];
 
-  const basket = o.unds.length > 1;
-  const levels = (k: number) => o.unds.map((u) => `${u.symbol} ${fmtPrice(u.observed[k])}`).join(' · ');
-  const events: Array<{ label: string; when: number; value?: string; state: 'done' | 'now' | 'later' }> = o.hasTerms
-    ? [
-        {
-          label: 'Book closes, strike fixed',
-          when: o.strikeDate,
-          value: o.strikeFixed
-            ? o.unds.map((u) => `${basket ? `${u.symbol} ` : ''}${fmtPrice(u.strike!)}`).join(' · ')
-            : undefined,
-          state: o.strikeFixed ? 'done' : o.phase === 'fixing' ? 'now' : 'later',
-        },
-        ...o.obsDates.map((t, k) => ({
-          label: k === o.obsDates.length - 1 ? 'Final observation (maturity)' : `Observation ${k + 1}`,
-          when: t,
-          value:
-            o.perfs[k] !== undefined
-              ? basket
-                ? `worst ${fmtPct(o.perfs[k])} (${levels(k)})`
-                : `${fmtPrice(o.unds[0].observed[k])} (${fmtPct(o.perfs[k])})`
-              : undefined,
-          state: (o.perfs[k] !== undefined ? 'done' : o.phase === 'live' && k === o.perfs.length ? 'now' : 'later') as
-            'done' | 'now' | 'later',
-          ...((o.phase === 'redeemed' || o.phase === 'defaulted') && o.perfs[k] === undefined
-            ? {
-                value:
-                  o.phase === 'defaulted'
-                    ? 'not reached: defaulted'
-                    : o.outcome?.calledAt
-                      ? `not needed: called at ${o.outcome.calledAt}`
-                      : 'not observed',
-              }
-            : {}),
-        })),
-      ]
-    : [];
   const secsAgo = Math.max(0, Math.round(now - updatedAt / 1000));
   const agent = agentLabel(o);
+  const sched = { strikeDate: o.strikeDate, obsDates: o.obsDates };
+  const rate = rateOf(o.params, sym, sched);
+  const st = statusOf(o, sym);
+  const marks = marksOf(o);
+  const next = nextCheck(o, now);
+  const finished = st.key !== 'open' && st.key !== 'running';
+  const name = o.hasTerms ? plainName(o.params) : o.name;
+  const chainKey = s.chain;
+  const chainShort = isNoteChain(chainKey) ? NOTE_CHAIN_SHORT[chainKey] : (chain?.cfg.name ?? chainKey);
+  // What the issuer must see at once (a payment to fund, a top-up), and holders when something is wrong.
+  const econUrgent = !!o.economics && (isIssuer || !!o.economics.marginCall || !!o.economics.inGrace);
+  const position = mine && (mine.units > 0 || mine.cash > 0 || delivered.length > 0);
+  const startPath = o.perfs.length ? o.perfs.map((x) => Math.round(x * 100)) : undefined;
 
   return (
-    <main className="page">
+    <main className="page note-page">
       <Link to="/" className="small row gap-4">
         <ArrowLeft className="i" />
         Marketplace
       </Link>
-      <div className="page-head">
-        <div className="stack gap-6">
-          <span className="label row gap-8">
+
+      {/* (a) the summary: what you get, the main risk, status, buy */}
+      <section className="note-sum" aria-label="In short">
+        <div className="card ns-main">
+          <div className="ns-tags">
             <AssetStack
               syms={o.unds.length ? o.unds.map((u) => u.symbol) : o.params.underlyings.map((u) => u.symbol)}
-              size={18}
+              size={28}
               label={false}
             />
-            {listingOf(o.params, {}, sym).assets} · <span data-note-chain>{chain?.cfg.name ?? s.chain}</span>
-          </span>
-          <div className="row">
-            <h1>{o.name}</h1>
-            <span className={`pill ${o.phase}`} data-phase={o.phase}>
-              <span className="dot" />
-              {PHASE_LABEL[o.phase]}
+            {o.hasTerms && <span className="tag">{productTag(o.params)}</span>}
+            <span className="tag chain">
+              <span data-note-chain>{chainShort}</span> · {sym}
             </span>
             {legacy && (
               <span
-                className="pill plain"
+                className="tag"
                 data-earlier-engine
                 title={`Issued on an earlier engine (v${chain?.version}). Your units are in that engine's ledger, not an ERC-20.`}
               >
@@ -242,183 +274,139 @@ export default function OfferingPage() {
               </span>
             )}
           </div>
-        </div>
-        <div className="stack gap-6 items-end">
-          <span
-            className="pill plain"
-            title="This page updates when the indexer sees anything happen to the note: a report, a subscription, a transfer."
-          >
-            <Radio className="i ic-12 text-success" />
-            Live · updated {secsAgo < 5 ? 'just now' : `${secsAgo}s ago`}
-          </span>
-          {agent && (
+          <div className="ns-title">
+            <h1>{name}</h1>
+            {o.hasTerms && name !== o.name && <span className="small muted">Issued as “{o.name}”</span>}
+          </div>
+          <div className="ns-status" data-phase={o.phase}>
+            {st.key === 'open' || st.key === 'running' ? (
+              <span className={`nc-live${st.key === 'open' ? ' open' : ''}`} data-countdown>
+                {next ? (
+                  <>
+                    {next.label} in <b className="num">{countdown(next.at, now)}</b>
+                  </>
+                ) : (
+                  CALM_LABEL[st.key]
+                )}
+              </span>
+            ) : (
+              <span className={`nc-done c-${st.key}`}>{CALM_LABEL[st.key]}</span>
+            )}
             <span
-              className="pill plain"
-              data-agent={o.reports.last ?? ''}
-              title="Who submitted this note's price reports: Chainlink CRE through its forwarder, or the fallback keeper where CRE cannot write"
+              className="xs muted row gap-4"
+              title="This page updates when the indexer sees anything happen to the note: a report, a subscription, a transfer."
             >
-              <ShieldCheck className="i ic-12" />
-              {agent}
+              <Radio className="i ic-12 text-success" />
+              Live · updated {secsAgo < 5 ? 'just now' : `${secsAgo}s ago`}
             </span>
+          </div>
+
+          {o.hasTerms ? (
+            <>
+              <div className="ns-rate">
+                <strong className="num">{rate.big}</strong>
+                <span>
+                  {rate.sub}
+                  {rate.cond && rate.cond !== 'fixed' ? `, ${rate.cond}` : ''}
+                </span>
+              </div>
+              <div className="ns-say">
+                <p className="good">
+                  <CheckCircle2 className="i" />
+                  <span>
+                    <b>What you get.</b> {getLine(o.params, sym)}
+                  </span>
+                </p>
+                <p className="risk">
+                  <AlertTriangle className="i" />
+                  <span>
+                    <b>The main risk.</b> {riskLine(o.params, sym)}
+                  </span>
+                </p>
+              </div>
+              <BarrierBar
+                p={o.params}
+                marks={marks}
+                past={finished}
+                note={
+                  o.phase === 'book'
+                    ? 'The lines are set against the starting price, which Chainlink fixes when the book closes.'
+                    : undefined
+                }
+              />
+              {st.story && <p className="nc-story">{st.story}</p>}
+              <ul className="nc-facts">
+                {factsOf(o.params, sched, [
+                  <span key="p">{pay.method === 'push' ? 'Paid to your wallet' : 'Claim payouts any time'}</span>,
+                ]).map((f, i) => (
+                  <li key={i}>{f}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="small muted">
+              A custom workflow: its payoff is defined by the workflow itself. See how it runs under Details.
+            </p>
           )}
-        </div>
-      </div>
-
-      {o.hasTerms && (
-        <section className="card plain-sum" aria-label="In short">
-          <YieldBlock o={o} cash={sym} big />
-          <Specs o={o} cash={sym} now={now} />
-        </section>
-      )}
-      {o.hasTerms && <FullTerms o={o} cash={sym} />}
-
-      <CurrentState o={o} now={now} sym={sym} units={mine && mine.units > 0 ? mine.units : null} />
-
-      {legacy && (
-        <div className="notice info" role="note" data-earlier-engine-note>
-          This note runs on an earlier version of the engine (v{chain?.version}). It keeps running to maturity there:
-          holders withdraw coupons, the redemption and anything delivered from this page or the portfolio. It takes no
-          new subscriptions; new notes are issued on the current engine.
-        </div>
-      )}
-
-      <div className="two note-layout">
-        <div className="stack">
-          <section className="card">
-            <div className="kv">
-              <div>
-                <span className="label">Size</span>
-                <span className="v">
-                  {fmtMoney(o.notional, 0)} {sym}
-                </span>
-              </div>
-              <div>
-                <span className="label">Subscribed</span>
-                <span className="v" data-sold>
-                  {fmtMoney(o.sold, 0)}
-                </span>
-              </div>
-              <div>
-                <span className="label">Issue price</span>
-                <span className="v">{o.params.issuePricePct}%</span>
-              </div>
-              <div>
-                <span className="label">Observations</span>
-                <span className="v">{o.params.observations}</span>
-              </div>
-              <div>
-                <span className="label">{basket ? 'Worst performance' : 'Performance'}</span>
-                <span className="v">{o.perfs.length ? fmtPct(o.perfs[o.perfs.length - 1]) : '—'}</span>
-              </div>
-              <div>
-                <span className="label">Paid so far per unit</span>
-                <span className="v" data-per-unit>
-                  {o.outcome ? `${o.outcome.perUnit.toFixed(4)} ${sym}` : '—'}
-                </span>
-              </div>
+          <dl className="ns-kv">
+            <div>
+              <dt>Size</dt>
+              <dd className="num">
+                {fmtMoney(o.notional, 0)} {sym}
+              </dd>
             </div>
-            {o.unds.length > 0 && (
-              <div className="scroll-x">
-                <table className="t">
-                  <thead>
-                    <tr>
-                      <th>Underlying</th>
-                      <th className="r">Strike</th>
-                      <th className="r">Last observed</th>
-                      <th className="r">Performance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {o.unds.map((u) => {
-                      const last = u.observed[u.observed.length - 1];
-                      return (
-                        <tr key={u.symbol}>
-                          <td>
-                            <span className="row gap-6 inline-flex">
-                              <AssetIcon sym={u.symbol} size={18} />
-                              {u.symbol}/USD
-                            </span>{' '}
-                            <span className="xs dim" title={`Chainlink feed on ${u.feedChain}: ${u.feed}`}>
-                              Chainlink · {FEED_CHAIN_LABELS[u.feedChain] ?? u.feedChain}
-                            </span>
-                          </td>
-                          <td className="r num">{u.strike === null ? '—' : fmtPrice(u.strike)}</td>
-                          <td className="r num">{last === undefined ? '—' : fmtPrice(last)}</td>
-                          <td className="r num">
-                            {last === undefined || u.strike === null ? '—' : fmtPct(last / u.strike)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <div>
+              <dt>Sold</dt>
+              <dd className="num" data-sold>
+                {fmtMoney(o.sold, 0)}
+              </dd>
+            </div>
+            <div>
+              <dt>Paid so far per unit</dt>
+              <dd className="num" data-per-unit>
+                {o.outcome ? `${o.outcome.perUnit.toFixed(4)} ${sym}` : '—'}
+              </dd>
+            </div>
+            {agent && (
+              <div>
+                <dt>Prices from</dt>
+                <dd
+                  data-agent={o.reports.last ?? ''}
+                  title="Who submitted this note's price reports: Chainlink CRE through its forwarder, or the fallback keeper where CRE cannot write"
+                >
+                  <ShieldCheck className="i ic-12" /> {agent.replace(/^Reported by /, '')}
+                </dd>
               </div>
             )}
-          </section>
-
-          {events.length > 0 && (
-            <section className="card">
-              <div className="spread">
-                <h3>Schedule</h3>
-                <span className="xs muted">Prices observed by Chainlink CRE · times in your time zone</span>
-              </div>
-              <div className="timeline">
-                {events.map((e) => (
-                  <div key={e.label} className={`tl ${e.state}`}>
-                    <span className="mark" />
-                    <span>
-                      {e.label}
-                      <br />
-                      <span className="xs muted">
-                        <When t={e.when} />
-                      </span>
-                    </span>
-                    <span className="num small text-right">
-                      {e.value ?? (e.state === 'now' ? (now >= e.when ? 'due: waiting for the report' : 'next') : '')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {xml && def && <NoteFlow xml={xml} def={def} state={s} view={o} sym={sym} explorer={explorer} />}
+          </dl>
         </div>
 
-        <aside className="stack">
+        <aside className="stack ns-side">
           {subscribable && (
-            <section className="card" data-subscribe>
+            <section className="card buy" data-subscribe>
               <div className="spread">
-                <h2>Subscribe</h2>
-                <span className="pill book">
-                  <span className="dot" />
+                <h2>Buy units</h2>
+                <span className="xs muted">
                   Open until <When t={o.strikeDate} />
                 </span>
               </div>
-              <ul className="terms" aria-label="What you get">
-                {plainTerms(o.params, sym, o.economics?.ratio ? Math.round(o.economics.ratio * 100) : undefined).map(
-                  (t) => (
-                    <li key={t.text} className={t.kind}>
-                      {t.kind === 'good' ? (
-                        <CheckCircle2 className="i" />
-                      ) : t.kind === 'risk' ? (
-                        <AlertTriangle className="i" />
-                      ) : (
-                        <Info className="i" />
-                      )}
-                      <span>{t.text}</span>
-                    </li>
-                  ),
-                )}
-              </ul>
               <div className="field">
                 <label htmlFor="units">
                   How many units?{' '}
                   <span className="muted">
-                    (1 unit = 1 {sym} of face · {fmtMoney(remaining, 0)} left)
+                    (1 unit = 1 {sym} · {fmtMoney(remaining, 0)} left)
                   </span>
                 </label>
                 <input id="units" inputMode="decimal" value={units} onChange={(e) => setUnits(e.target.value)} />
+                <div className="presets">
+                  {[10, 100, 1000]
+                    .filter((x) => x <= remaining)
+                    .map((x) => (
+                      <button key={x} type="button" className="chip" onClick={() => setUnits(String(x))}>
+                        {x.toLocaleString()}
+                      </button>
+                    ))}
+                </div>
               </div>
               <div className="youpay">
                 <div>
@@ -433,9 +421,6 @@ export default function OfferingPage() {
                 </div>
               </div>
               {Number(units) > remaining && <p className="xs err">Only {fmtMoney(remaining, 0)} units are left.</p>}
-              <p className="xs muted m-0" data-how-paid>
-                <strong>How you get paid:</strong> {pay.detail}
-              </p>
               <button
                 className="btn primary lg"
                 disabled={!me || busy || !(Number(units) > 0) || Number(units) > remaining}
@@ -455,35 +440,42 @@ export default function OfferingPage() {
                   ]}
                 />
               )}
-              <p className="xs muted">
-                Need {sym}? Use <b>Get testnet tokens</b> in the top bar.
+              <p className="xs muted m-0" data-how-paid>
+                {pay.detail} Need {sym}? The tools menu in the top bar lists the faucets.
               </p>
               {emailGate.dialog}
             </section>
           )}
 
-          {def && o.economics && (
-            <EconomicsPanel
-              e={o.economics}
-              state={s}
-              def={def}
-              issuer={o.issuer}
-              sym={sym}
-              now={now}
-              onDone={refresh}
-            />
+          {!subscribable && !position && (
+            <section className={`card ns-next${finished ? ' finished' : ''}`}>
+              {next ? (
+                <>
+                  <span className="small muted">{next.label}</span>
+                  <strong className="num">{countdown(next.at, now)}</strong>
+                  <span className="xs muted">
+                    <When t={next.at} />
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="small muted">{finished ? 'This note has finished' : 'Status'}</span>
+                  <strong>{CALM_LABEL[st.key]}</strong>
+                  {o.outcome && (
+                    <span className="small">
+                      Holders got <b className="num">{fmtMoney(o.outcome.perUnit, 4)}</b> {sym} per unit
+                      {o.phase === 'defaulted' ? ' before the default, then the collateral' : ''}.
+                    </span>
+                  )}
+                </>
+              )}
+              <Link to="/" className="btn sm">
+                Browse other notes
+              </Link>
+            </section>
           )}
 
-          {def && (
-            <TasksPanel
-              state={s}
-              def={def}
-              onDone={refresh}
-              hide={[...(o.custom ? [] : ['Task_Subscribe']), ...economicSteps]}
-            />
-          )}
-
-          {mine && (mine.units > 0 || mine.cash > 0 || delivered.length > 0) && (
+          {position && mine && (
             <section className="card" data-position>
               <h3>Your position</h3>
               <div className="kv">
@@ -532,19 +524,18 @@ export default function OfferingPage() {
                 >{`Claim ${mine.cash > 1e-6 ? `${fmtMoney(mine.cash)} ` : ''}${sym}`}</button>
               )}
               {delivered.map((h) => {
-                const name = h.name.replace(/^Collateral /, '');
+                const nm = h.name.replace(/^Collateral /, '');
                 const kind = h.name.startsWith('Collateral ')
                   ? isIssuer
                     ? 'Collateral released'
                     : 'Collateral received'
                   : 'Delivered';
                 const auto = autoReleased(s.assetTokens?.[h.asset]);
-                const real = name.replace(/\.[a-z]+$/, '');
+                const real = nm.replace(/\.[a-z]+$/, '');
                 return (
                   <div key={h.asset} className="spread small" data-other-asset={h.name}>
                     <span>
-                      {kind} <span className="num">{h.amount.toFixed(6)}</span>{' '}
-                      {auto ? `${real} on ${auto.chain}` : name}
+                      {kind} <span className="num">{h.amount.toFixed(6)}</span> {auto ? `${real} on ${auto.chain}` : nm}
                     </span>
                     {auto ? (
                       <button
@@ -562,49 +553,51 @@ export default function OfferingPage() {
                       </button>
                     ) : (
                       <button className="btn" disabled={busy} onClick={() => withdraw(h.asset)}>
-                        Withdraw {name}
+                        Withdraw {nm}
                       </button>
                     )}
                   </div>
                 );
               })}
               {mine.units > 0 && o.phase !== 'redeemed' && o.phase !== 'defaulted' && (
-                <div className="stack gap-8 divider-top">
-                  <span className="label">Transfer notes</span>
-                  <div className="field">
-                    <label htmlFor="x-to">To wallet</label>
-                    <input
-                      id="x-to"
-                      className="num"
-                      value={xfer.to}
-                      onChange={(e) => setXfer({ ...xfer, to: e.target.value })}
-                      placeholder="0x…"
-                    />
+                <details className="adv">
+                  <summary>Transfer units</summary>
+                  <div className="stack gap-8 adv-body">
+                    <div className="field">
+                      <label htmlFor="x-to">To wallet</label>
+                      <input
+                        id="x-to"
+                        className="num"
+                        value={xfer.to}
+                        onChange={(e) => setXfer({ ...xfer, to: e.target.value })}
+                        placeholder="0x…"
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="x-units">Units (up to {fmtMoney(mine.units)})</label>
+                      <input
+                        id="x-units"
+                        inputMode="decimal"
+                        value={xfer.units}
+                        onChange={(e) => setXfer({ ...xfer, units: e.target.value })}
+                      />
+                    </div>
+                    <button
+                      className="btn"
+                      disabled={busy || !(Number(xfer.units) > 0) || Number(xfer.units) > mine.units}
+                      onClick={transfer}
+                    >
+                      Transfer
+                    </button>
+                    <span className="xs muted">
+                      In whole or in part, to a wallet with a verified email only.{' '}
+                      {legacy
+                        ? 'Cash already credited stays yours to withdraw'
+                        : 'Payouts already made stay yours to claim'}
+                      ; from now on they go to whoever holds the units.
+                    </span>
                   </div>
-                  <div className="field">
-                    <label htmlFor="x-units">Units (up to {fmtMoney(mine.units)})</label>
-                    <input
-                      id="x-units"
-                      inputMode="decimal"
-                      value={xfer.units}
-                      onChange={(e) => setXfer({ ...xfer, units: e.target.value })}
-                    />
-                  </div>
-                  <button
-                    className="btn"
-                    disabled={busy || !(Number(xfer.units) > 0) || Number(xfer.units) > mine.units}
-                    onClick={transfer}
-                  >
-                    Transfer
-                  </button>
-                  <span className="xs muted">
-                    In whole or in part, to a wallet with a verified email only.{' '}
-                    {legacy
-                      ? 'Cash already credited stays yours to withdraw'
-                      : 'Payouts already made stay yours to claim'}
-                    ; from now on they go to whoever holds the units.
-                  </span>
-                </div>
+                </details>
               )}
             </section>
           )}
@@ -620,12 +613,174 @@ export default function OfferingPage() {
             </div>
           )}
 
-          {def && <HoldersPanel state={s} def={def} explorer={explorer} issuer={o.issuer} />}
+          {def && o.economics && econUrgent && (
+            <EconomicsPanel
+              e={o.economics}
+              state={s}
+              def={def}
+              issuer={o.issuer}
+              sym={sym}
+              now={now}
+              onDone={refresh}
+            />
+          )}
 
-          {o.custom && def && (
-            <section className="card">
-              <h3>Workflow fields</h3>
+          {def && (
+            <TasksPanel
+              state={s}
+              def={def}
+              onDone={refresh}
+              hide={[...(o.custom ? [] : ['Task_Subscribe']), ...economicSteps]}
+            />
+          )}
+        </aside>
+      </section>
+
+      {legacy && (
+        <div className="notice info" role="note" data-earlier-engine-note>
+          This note runs on an earlier version of the engine (v{chain?.version}). It keeps running to maturity there:
+          holders withdraw coupons, the redemption and anything delivered from this page or the portfolio. It takes no
+          new subscriptions; new notes are issued on the current engine.
+        </div>
+      )}
+
+      {/* (b) the timeline, and play the note */}
+      {o.hasTerms && <Timeline o={o} sym={sym} now={now} />}
+      {o.hasTerms && !o.custom && (
+        <PlayNote
+          p={o.params}
+          cash={sym}
+          schedule={sched}
+          start={startPath}
+          title={finished ? 'Play it again: what if prices had moved differently?' : 'Play the note'}
+        />
+      )}
+
+      {/* (c) details */}
+      <section className="card details" aria-labelledby="details-h">
+        <h2 id="details-h">Details</h2>
+        <div className="seg tabs" role="tablist" aria-label="Details">
+          {(
+            [
+              ['terms', 'Full terms'],
+              ...(o.economics && !econUrgent ? [['money', 'Collateral & payments']] : []),
+              ['holders', 'Holders'],
+              ['flow', 'How it runs'],
+              ['contract', 'Contract'],
+            ] as Array<[Tab, string]>
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              role="tab"
+              type="button"
+              aria-selected={tab === k}
+              className={tab === k ? 'active' : ''}
+              onClick={() => setTab(k)}
+              data-tab={k}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <TabPanel on={tab === 'terms'}>
+          {o.hasTerms && <FullTerms o={o} cash={sym} open={!narrow} />}
+          {!o.custom && (
+            <div className="stack gap-6">
+              <h3>Payout per 100 at the end</h3>
+              <div className="payoff-box">
+                <PayoffChart params={o.params} />
+              </div>
+              <p className="xs muted">
+                Against the final {o.unds.length > 1 ? 'weakest level' : 'level'}, % of the starting price, if the note
+                did not end early. Dashed lines:{' '}
+                {linesOf(o.params)
+                  .map((l) => l.label)
+                  .join(', ')}
+                .
+              </p>
+            </div>
+          )}
+        </TabPanel>
+        {o.economics && !econUrgent && def && (
+          <TabPanel on={tab === 'money'}>
+            <EconomicsPanel
+              e={o.economics}
+              state={s}
+              def={def}
+              issuer={o.issuer}
+              sym={sym}
+              now={now}
+              onDone={refresh}
+            />
+          </TabPanel>
+        )}
+        <TabPanel on={tab === 'holders'}>
+          {def && <HoldersPanel state={s} def={def} explorer={explorer} issuer={o.issuer} />}
+        </TabPanel>
+        <TabPanel on={tab === 'flow'}>
+          {xml && def && <NoteFlow xml={xml} def={def} state={s} view={o} sym={sym} explorer={explorer} />}
+        </TabPanel>
+        <TabPanel on={tab === 'contract'}>
+          <div className="stack">
+            {o.unds.length > 0 && (
+              <ul className="und-list">
+                {o.unds.map((u) => {
+                  const last = u.observed[u.observed.length - 1];
+                  return (
+                    <li key={u.symbol}>
+                      <span className="row gap-6">
+                        <AssetIcon sym={u.symbol} size={18} />
+                        <b>{u.symbol}/USD</b>
+                        <span className="xs dim" title={`Chainlink feed on ${u.feedChain}: ${u.feed}`}>
+                          Chainlink · {FEED_CHAIN_LABELS[u.feedChain] ?? u.feedChain}
+                        </span>
+                      </span>
+                      <span className="num small">
+                        start {u.strike === null ? '—' : fmtPrice(u.strike)} · last{' '}
+                        {last === undefined ? '—' : fmtPrice(last)}
+                        {last !== undefined && u.strike !== null ? ` (${fmtPct(last / u.strike)})` : ''}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <div className="adv-body small contract">
+              <Row k="Network">{chain?.cfg.name ?? s.chain}</Row>
+              <Row k="Phase on-chain">{PHASE_LABEL[o.phase]}</Row>
+              {noteToken && (
+                <Row k="Note token (ERC-20)">
+                  <Addr value={noteToken} href={explorer ? `${explorer}/token/${noteToken}` : undefined} />
+                </Row>
+              )}
+              <Row k={`Engine${legacy ? ` (v${chain?.version}, earlier)` : ''} · note #`}>
+                <Addr value={s.engine} href={explorer ? `${explorer}/address/${s.engine}` : undefined} /> · #{s.pid}
+              </Row>
+              <Row k="Workflow definition">
+                <Addr value={s.definition} />
+              </Row>
+              <Row k="Issuer">
+                <Addr value={o.issuer} href={explorer ? `${explorer}/address/${o.issuer}` : undefined} />
+              </Row>
+              <Row k="Note units held">
+                <span className="num">
+                  {fmtMoney(
+                    s.holdings
+                      .filter((h) => h.asset === NOTE_ASSET)
+                      .reduce((a, h) => a + Number(BigInt(h.balance)) / Number(SCALE), 0),
+                    0,
+                  )}
+                </span>
+              </Row>
+            </div>
+            {o.custom && def && (
               <table className="t">
+                <thead>
+                  <tr>
+                    <th>Workflow field</th>
+                    <th className="r">Value</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {def.fields.map((f, i) => {
                     const v = s.values[i];
@@ -647,62 +802,134 @@ export default function OfferingPage() {
                   })}
                 </tbody>
               </table>
-            </section>
-          )}
-
-          {!o.custom && (
-            <section className="card">
-              <h3>Payout per 100 at maturity</h3>
-              <PayoffChart params={o.params} />
-              <p className="xs muted">
-                Against the final {basket ? 'worst performance' : 'level'}, % of strike, if not called earlier. Dashed
-                lines: barriers.
-              </p>
-            </section>
-          )}
-
-          <details className="adv">
-            <summary>Advanced: contract details</summary>
-            <div className="adv-body small">
-              <div className="spread">
-                <span className="muted">Network</span>
-                <span>{chain?.cfg.name ?? s.chain}</span>
-              </div>
-              {noteToken && (
-                <div className="spread">
-                  <span className="muted">Note token (ERC-20)</span>
-                  <Addr value={noteToken} href={explorer ? `${explorer}/token/${noteToken}` : undefined} />
-                </div>
-              )}
-              <div className="spread">
-                <span className="muted">Engine{legacy ? ` (v${chain?.version}, earlier)` : ''} · note #</span>
-                <span>
-                  <Addr value={s.engine} href={explorer ? `${explorer}/address/${s.engine}` : undefined} /> · #{s.pid}
-                </span>
-              </div>
-              <div className="spread">
-                <span className="muted">Workflow definition</span>
-                <Addr value={s.definition} />
-              </div>
-              <div className="spread">
-                <span className="muted">Issuer</span>
-                <Addr value={o.issuer} href={explorer ? `${explorer}/address/${o.issuer}` : undefined} />
-              </div>
-              <div className="spread">
-                <span className="muted">Note units held</span>
-                <span className="num">
-                  {fmtMoney(
-                    s.holdings
-                      .filter((h) => h.asset === NOTE_ASSET)
-                      .reduce((a, h) => a + Number(BigInt(h.balance)) / Number(SCALE), 0),
-                    0,
-                  )}
-                </span>
-              </div>
-            </div>
-          </details>
-        </aside>
-      </div>
+            )}
+          </div>
+        </TabPanel>
+      </section>
     </main>
+  );
+}
+
+/** A tab's panel: mounted the first time it opens, then kept (hidden) so its state survives switching. */
+function TabPanel({ on, children }: { on: boolean; children: ReactNode }) {
+  const [seen, setSeen] = useState(on);
+  useEffect(() => {
+    if (on) setSeen(true);
+  }, [on]);
+  if (!seen && !on) return null;
+  return (
+    <div role="tabpanel" hidden={!on}>
+      {children}
+    </div>
+  );
+}
+
+function Row({ k, children }: { k: string; children: ReactNode }) {
+  return (
+    <div className="spread">
+      <span className="muted">{k}</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+/**
+ * The checks and payments, one row each (stacked as cards on a phone): when, the weakest level Chainlink saw, and
+ * what it meant for holders (the payment's status from the note's economics).
+ */
+function Timeline({ o, sym, now }: { o: NoteView; sym: string; now: number }) {
+  const periods = o.economics?.periods ?? [];
+  const lines = linesOf(o.params);
+  const rows: Array<{
+    key: string;
+    title: string;
+    when: number;
+    state: 'done' | 'now' | 'later' | 'skip';
+    level?: string;
+    note?: string;
+    pay?: { text: string; tone: 'good' | 'risk' | 'muted' };
+  }> = [
+    {
+      key: 'strike',
+      title: 'Book closes, starting price fixed',
+      when: o.strikeDate,
+      state: o.strikeFixed ? 'done' : o.phase === 'fixing' || o.phase === 'book' ? 'now' : 'later',
+      level: o.strikeFixed ? o.unds.map((u) => `${u.symbol} ${fmtPrice(u.strike!)}`).join(' · ') : undefined,
+    },
+    ...o.obsDates.map((t, k) => {
+      const perf = o.perfs[k];
+      const per = periods.find((x) => x.k === k + 1);
+      const stopped = (o.phase === 'redeemed' || o.phase === 'defaulted') && perf === undefined;
+      const above = perf === undefined ? undefined : [...lines].reverse().find((l) => perf * 100 >= l.pct);
+      const pay: { text: string; tone: 'good' | 'risk' | 'muted' } | undefined = per
+        ? per.status === 'paid'
+          ? { text: `Paid ${fmtMoney(per.perUnit ?? 0, 4)} ${sym} per unit`, tone: 'good' }
+          : per.status === 'missed'
+            ? { text: 'Not paid by the issuer: holders paid from the collateral', tone: 'risk' }
+            : per.status === 'grace' || per.status === 'due'
+              ? { text: `${fmtMoney(per.perUnit ?? 0, 4)} ${sym} per unit due`, tone: 'muted' }
+              : per.status === 'nothing-due'
+                ? { text: 'No payment this time', tone: 'muted' }
+                : per.status === 'cancelled'
+                  ? undefined
+                  : per.perUnit
+                    ? { text: `${fmtMoney(per.perUnit, 4)} ${sym} per unit expected`, tone: 'muted' }
+                    : undefined
+        : undefined;
+      return {
+        key: `o${k}`,
+        title: k === o.obsDates.length - 1 ? `Check ${k + 1} · the end` : `Check ${k + 1}`,
+        when: t,
+        state: (perf !== undefined
+          ? 'done'
+          : stopped
+            ? 'skip'
+            : o.phase === 'live' && k === o.perfs.length
+              ? 'now'
+              : 'later') as 'done' | 'now' | 'later' | 'skip',
+        level:
+          perf !== undefined
+            ? `${o.unds.length > 1 ? 'Weakest ' : ''}${fmtPct(perf)}${above ? `, above the ${above.label}` : lines.length ? `, below the ${lines[0].label}` : ''}`
+            : undefined,
+        note: stopped
+          ? o.phase === 'defaulted'
+            ? 'Not reached: the note ended at the default'
+            : o.outcome?.calledAt
+              ? `Not needed: repaid early at check ${o.outcome.calledAt}`
+              : 'Not observed'
+          : perf === undefined && o.phase === 'live' && k === o.perfs.length
+            ? now >= t
+              ? 'Due: waiting for Chainlink'
+              : `In ${countdown(t, now)}`
+            : undefined,
+        pay,
+      };
+    }),
+  ];
+  return (
+    <section className="card tl2" aria-labelledby="tl-h">
+      <div className="spread">
+        <h2 id="tl-h">Checks and payments</h2>
+        <span className="xs muted">Prices checked by Chainlink · times in your time zone</span>
+      </div>
+      <ol className="tl2-list">
+        {rows.map((r) => (
+          <li key={r.key} className={`tl2-row ${r.state}`}>
+            <span className="tl2-dot" aria-hidden="true" />
+            <div className="tl2-when">
+              <b>{r.title}</b>
+              <span className="xs muted">
+                <When t={r.when} />
+              </span>
+            </div>
+            <div className="tl2-what small">
+              {r.level && <span>{r.level}</span>}
+              {r.note && <span className="muted">{r.note}</span>}
+              {r.pay && <span className={`tl2-pay ${r.pay.tone}`}>{r.pay.text}</span>}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

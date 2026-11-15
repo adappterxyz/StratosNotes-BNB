@@ -13,11 +13,11 @@ import { errText, fmtDate, fmtMoney, fmtPct, isReceipt, lockedAsset, lockedOn } 
 
 const STATUS: Record<PeriodStatus, string> = {
   upcoming: 'Upcoming',
-  'nothing-due': 'Nothing due',
+  'nothing-due': 'No payment',
   due: 'Due',
   paid: 'Paid',
-  grace: 'In grace',
-  missed: 'Missed: default',
+  grace: 'Late: extra time',
+  missed: 'Missed: from collateral',
   cancelled: '—',
 };
 const fallbackName = (symbol: string) => (symbol === 'USD' ? 'USD' : `t${symbol}`);
@@ -116,7 +116,7 @@ export default function EconomicsPanel({
           data-econ-state={e.state}
         >
           {e.state === 'defaulted'
-            ? 'Defaulted'
+            ? 'Paid from collateral'
             : e.state === 'margin-call'
               ? 'Margin call'
               : e.state === 'grace'
@@ -179,7 +179,7 @@ export default function EconomicsPanel({
       )}
 
       {e.state === 'defaulted' && (
-        <div className="notice err row" role="status">
+        <div className="notice info row" role="status">
           <ShieldAlert className="i" />
           The issuer did not{' '}
           {e.milestones.some((m) => m.name === 'margin-call') && !e.milestones.some((m) => m.name === 'payment-missed')
@@ -210,26 +210,32 @@ export default function EconomicsPanel({
 
       <div className="kv">
         <div>
-          <span className="label">Collateral ratio</span>
+          <span className="label">Collateral required</span>
           <span className="v" data-ratio>
             {e.ratio === null ? '—' : fmtPct(e.ratio)}
           </span>
         </div>
         <div>
-          <span className="label">Required</span>
+          <span className="label">Worth at least</span>
           <span className="v">{e.required === null ? '—' : `${fmtMoney(e.required, 0)} ${sym}`}</span>
         </div>
         <div>
-          <span className="label">Coverage now</span>
+          <span className="label">Collateral value now</span>
           <span className="v" data-coverage>
-            {e.coverage === null ? '—' : `${fmtMoney(e.coverage, 0)} ${sym}`}
-            {e.coveragePct !== null && (
+            {e.state === 'defaulted'
+              ? 'Paid out to holders'
+              : e.state === 'released'
+                ? 'Returned to the issuer'
+                : e.coverage === null
+                  ? '—'
+                  : `${fmtMoney(e.coverage, 0)} ${sym}`}
+            {e.coveragePct !== null && e.state !== 'defaulted' && e.state !== 'released' && (
               <span className={`xs ${covered ? 'muted' : 'err'}`}> ({fmtPct(e.coveragePct)})</span>
             )}
           </span>
         </div>
         <div>
-          <span className="label">Funded, not yet paid</span>
+          <span className="label">Set aside for the next payment</span>
           <span className="v" data-escrow-cash>
             {fmtMoney(e.escrowCash)} {sym}
           </span>
@@ -276,7 +282,7 @@ export default function EconomicsPanel({
         <table className="t" data-schedule>
           <thead>
             <tr>
-              <th>Period</th>
+              <th>Check</th>
               <th>Payment date</th>
               <th className="r">Per unit</th>
               <th className="r">Issuer funds</th>
@@ -290,7 +296,7 @@ export default function EconomicsPanel({
                 <td className="small">
                   <When t={p.payDate} />
                   <div className="xs dim">
-                    grace to <When t={p.graceEnd} />
+                    extra time to <When t={p.graceEnd} />
                   </div>
                 </td>
                 <td className="r num">

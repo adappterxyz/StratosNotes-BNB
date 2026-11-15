@@ -1,8 +1,23 @@
+import { Timer } from 'lucide-react';
 import type { ChainConfig } from '../../lib/api';
-import { Num } from './Num';
+import { Presets } from './controls';
 import type { Every, Timing } from './schedule';
 
-/** Step 3, Schedule: the size, when the book closes, and how often the note observes. */
+const SIZES = [1_000, 10_000, 100_000];
+const BOOK = [
+  { min: 5, label: 'In 5 minutes' },
+  { min: 60, label: 'In 1 hour' },
+  { min: 24 * 60, label: 'Tomorrow' },
+  { min: 7 * 24 * 60, label: 'In a week' },
+];
+const EVERY: Array<{ v: Every; label: string; sub: string; star?: boolean }> = [
+  { v: { n: 3, unit: 'minutes' }, label: 'Demo: every 3 minutes', sub: 'Watch a whole note run', star: true },
+  { v: { n: 1, unit: 'days' }, label: 'Every day', sub: 'A short test' },
+  { v: { n: 1, unit: 'months' }, label: 'Every month', sub: '' },
+  { v: { n: 3, unit: 'months' }, label: 'Every 3 months', sub: 'Usual for notes' },
+];
+
+/** Step 3, Schedule: how much is on offer, when the book closes, and how often the price is checked. */
 export function ScheduleStep({
   sym,
   size,
@@ -36,31 +51,54 @@ export function ScheduleStep({
   fmtT: (s: number) => string;
   demo: boolean;
 }) {
+  const runs = demo ? Math.round(((dateOf(observations) - strikeAt) / 60) * 10) / 10 : null;
   return (
     <>
       <h2>Schedule</h2>
-      <div className="form-grid">
-        <Num
-          id="is-size"
+      <div className="iw-field">
+        <div className="iw-field-h">
+          <label htmlFor="is-size">How much to raise</label>
+          <span className="with-suffix maxw-200">
+            <input id="is-size" type="number" min={1} value={size} onChange={(e) => setSize(Number(e.target.value))} />
+            <span className="suffix">{sym}</span>
+          </span>
+        </div>
+        <Presets
           label="Size"
-          suffix={sym}
+          options={SIZES.map((s) => ({ label: `${s.toLocaleString()} ${sym}`, value: s }))}
           value={size}
-          min={1}
-          onChange={(v) => setSize(v)}
-          hint={`Units on offer, one unit per 1 ${sym} of face value.`}
+          onPick={setSize}
         />
-        <Num
-          id="is-strike"
-          label="Book closes in"
-          suffix="minutes"
+        <span className="hint">Units on offer: one unit per 1 {sym} of face value.</span>
+      </div>
+
+      <div className="iw-field">
+        <div className="iw-field-h">
+          <label htmlFor="is-strike">Book closes</label>
+          <span className="with-suffix maxw-200">
+            <input
+              id="is-strike"
+              type="number"
+              min={2}
+              value={strikeIn}
+              onChange={(e) => setStrikeIn(Math.max(2, Number(e.target.value) || 2))}
+            />
+            <span className="suffix">minutes</span>
+          </span>
+        </div>
+        <Presets
+          label="Book closes"
+          options={BOOK.map((b) => ({ label: b.label, value: b.min }))}
           value={strikeIn}
-          min={2}
-          onChange={(v) => setStrikeIn(Math.max(2, v || 2))}
-          hint="The strike is fixed then."
+          onPick={setStrikeIn}
         />
-        <div className="field">
-          <label htmlFor="is-every">Observe every</label>
-          <div className="row flex-nowrap">
+        <span className="hint">Investors can buy until then; Chainlink fixes the starting prices at that moment.</span>
+      </div>
+
+      <div className="iw-field">
+        <div className="iw-field-h">
+          <label htmlFor="is-every">How often the price is checked</label>
+          <span className="row flex-nowrap gap-6 maxw-240">
             <input
               className="w-64"
               id="is-every"
@@ -84,13 +122,38 @@ export function ScheduleStep({
               <option value="days">days</option>
               <option value="months">months</option>
             </select>
-          </div>
+          </span>
         </div>
+        <Presets
+          label="Check every"
+          options={EVERY.map((e) => ({ label: e.label, sub: e.sub || undefined, value: e.v, star: e.star }))}
+          value={every}
+          onPick={(v) => {
+            setEvery(v);
+            setTiming(null);
+          }}
+        />
       </div>
-      <p className="small muted">
-        On {chainCfg?.name ?? chainKey}, where every note is issued. Strike {fmtT(strikeAt)}, then{' '}
-        {Array.from({ length: observations }, (_, i) => fmtT(dateOf(i + 1))).join(' · ')}.
-        {demo ? ' Minutes apart runs a whole lifecycle while you watch.' : ''}
+
+      <div className="iw-timeline" aria-label="Dates">
+        <span className="iw-tl-dot start">
+          <b>Start</b>
+          {fmtT(strikeAt)}
+        </span>
+        {Array.from({ length: observations }, (_, i) => (
+          <span key={i} className={`iw-tl-dot${i === observations - 1 ? ' end' : ''}`}>
+            <b>{i === observations - 1 ? 'End' : `Check ${i + 1}`}</b>
+            {fmtT(dateOf(i + 1))}
+          </span>
+        ))}
+      </div>
+      <p className="small muted m-0">
+        On {chainCfg?.name ?? chainKey}.{' '}
+        {demo && runs !== null && (
+          <span className="iw-demo">
+            <Timer className="i" /> The whole note runs in about {runs} minutes after the book closes: watch it live.
+          </span>
+        )}
       </p>
     </>
   );

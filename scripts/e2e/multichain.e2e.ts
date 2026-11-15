@@ -113,7 +113,7 @@ try {
   // The header and the marketplace.
   await page.goto(`${APP}/`);
   await page.locator('[data-networks]').waitFor();
-  const nets = await page.locator('[data-networks]').innerText();
+  const nets = (await page.locator('[data-networks]').getAttribute('data-networks')) ?? '';
   check(/Robinhood Chain testnet/.test(nets) && /Base Sepolia/.test(nets), `the header names both networks (${nets})`);
   const filter = page.locator('[data-chain-filter]');
   check(await filter.isVisible(), 'the marketplace has a network filter');
@@ -121,9 +121,7 @@ try {
     (await filter.locator('[data-chain]').allInnerTexts()).join('|') === 'All networks|Robinhood Chain|Base',
     'filter: All networks, Robinhood Chain, Base',
   );
-  // Show every note, not only open books (the fixture's notes have no strike date).
-  const open = page.getByRole('button', { name: 'Open now' });
-  if ((await open.getAttribute('aria-pressed')) === 'true') await open.click();
+  // Every note is shown by default (open first, then running, then finished).
   await page.locator('[data-note]').first().waitFor();
   check((await page.locator('[data-note]').count()) === 2, 'both notes listed under All networks');
   await filter.locator('[data-chain="base-sepolia"]').click();

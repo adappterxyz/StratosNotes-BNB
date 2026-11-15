@@ -1,26 +1,24 @@
 /**
- * "Start from a note": the notes issued recently on the current engine (RecentList), and the ready-made notes (the
- * built-in examples and the ones issuers saved), as the marketplace shows a note (the annual rate, the assets, term,
- * protection, collateral), with the marketplace's filters.
+ * "Start from a ready-made note", on the chain picked first: the built-in examples and the notes issuers saved, each
+ * as investors would see it (plain name, rate, the barrier bar), with its terms moved to that chain (toChain). A note
+ * written for the other chain says what changes (a stock it cannot deliver there settles in cash; collateral it
+ * cannot hold there is swapped). RecentList: the notes issued recently on that chain, to issue again.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarClock, LifeBuoy, ShieldCheck, Undo2, Workflow } from 'lucide-react';
-import {
-  chainLabel,
-  collateralTokenOf,
-  economicsOf,
-  isRemoteCollateral,
-  NOTE_CHAIN_LABELS,
-  noteChainOf,
-} from '@sn/core';
+import { ArrowRight, Workflow } from 'lucide-react';
+import { economicsOf, isNoteChain, NOTE_CHAIN_SHORT, noteChainOf, toChain, type ProductParams } from '@sn/core';
 import { parseNoteId } from '@sn/sdk';
 import type { NoteItem } from '../../lib/api';
 import { useChains } from '../../lib/chains';
 import { listingOf } from '../../lib/listing';
 import { BUILT_IN, libraryReadyMade, recentReadyMade, type ReadyMade } from '../../lib/readymade';
+import { plainName, productTag } from '../../lib/story';
 import { fmtDate, short } from '../../lib/format';
 import { AssetStack } from '../AssetIcon';
+import { BarrierBar } from '../BarrierBar';
+import { rateOf } from '../NoteCard';
+import { cashOn } from './ChainPicker';
 
 const FIRST = 6;
 type Filter = 'stocks' | 'crypto' | 'yield' | 'protect';
@@ -31,67 +29,61 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: 'protect', label: 'Protect capital' },
 ];
 
-function collateralLine(r: ReadyMade) {
-  const e = economicsOf(r.params);
-  const names = [
-    ...new Set(
-      e.collateral.map((c) => (collateralTokenOf(r.params, c.symbol)?.token ?? c.symbol).replace(/\.[a-z]+$/, '')),
-    ),
-  ];
-  const where = isRemoteCollateral(r.params)
-    ? `locked on ${chainLabel(r.params.collateralChain!)}`
-    : `on ${NOTE_CHAIN_LABELS[noteChainOf(r.params)]}`;
-  return `Backed by ${e.collateralRatioPct}% collateral (${names.join(' + ')}, ${where})`;
+/** The terms on `chain`, and what had to change to get them there (empty when written for it). */
+export function onChain(p: ProductParams, chain: string): { params: ProductParams; changes: string[] } {
+  if (!isNoteChain(chain) || noteChainOf(p) === chain) return { params: p, changes: [] };
+  const q = toChain(p, chain);
+  const changes: string[] = [];
+  if (p.settlement === 'physical' && q.settlement !== 'physical') changes.push('settles in cash');
+  const a = economicsOf(p)
+    .collateral.map((c) => c.symbol)
+    .join();
+  const b = economicsOf(q)
+    .collateral.map((c) => c.symbol)
+    .join();
+  if (a !== b || p.collateralChain !== q.collateralChain) changes.push('different collateral');
+  return { params: q, changes };
 }
 
-function Card({ r, onPick, recent = false }: { r: ReadyMade; onPick: (r: ReadyMade) => void; recent?: boolean }) {
-  const l = listingOf(r.params);
+function Card({
+  r,
+  chain,
+  onPick,
+  recent = false,
+}: {
+  r: ReadyMade;
+  chain: string;
+  onPick: (r: ReadyMade) => void;
+  recent?: boolean;
+}) {
+  const { config } = useChains();
+  const cfg = config.chains.find((c) => c.key === chain);
+  const cash = cfg ? cashOn(cfg) : 'USD';
+  const { params, changes } = onChain(r.params, chain);
+  const rate = rateOf(params, cash);
+  const where = isNoteChain(chain) ? NOTE_CHAIN_SHORT[chain] : chain;
   const inner = (
     <>
-      <div className="ls-head">
-        <AssetStack syms={r.params.underlyings.map((u) => u.symbol)} size={26} label={false} />
-        <div className="ls-assets">
-          <strong>{r.name}</strong>
-          <span className="xs muted">{l.assets}</span>
+      <div className="nc-top">
+        <AssetStack syms={params.underlyings.map((u) => u.symbol)} size={28} label={false} />
+        <div className="nc-title">
+          <h3>{plainName(params)}</h3>
+          <div className="nc-tags">
+            <span className="tag">{productTag(params)}</span>
+            <span className="tag">{listingOf(params).term}</span>
+          </div>
         </div>
       </div>
-      <div className="ls-yield">
-        <strong className="num">{l.yield.headline}</strong>
-        {l.yield.rateLabel && <span className="ls-rate-label">{l.yield.rateLabel}</span>}
-        <span className="small muted">{l.yield.sub}</span>
-        {l.yield.qualifier && <span className="xs ls-cond">{l.yield.qualifier} · not guaranteed</span>}
+      <div className="tpl-rate">
+        <strong className="num">{rate.big}</strong>
+        <span>{rate.sub}</span>
       </div>
-      <ul className="ls-specs">
-        <li>
-          <span className="ls-ic" aria-hidden="true">
-            <CalendarClock />
-          </span>
-          <span>{l.term}</span>
-        </li>
-        {l.protection && (
-          <li>
-            <span className="ls-ic" aria-hidden="true">
-              <LifeBuoy />
-            </span>
-            <span>{l.protection}</span>
-          </li>
-        )}
-        {l.early && (
-          <li>
-            <span className="ls-ic" aria-hidden="true">
-              <Undo2 />
-            </span>
-            <span>{l.early}</span>
-          </li>
-        )}
-        <li>
-          <span className="ls-ic" aria-hidden="true">
-            <ShieldCheck />
-          </span>
-          <span>{collateralLine(r)}</span>
-        </li>
-      </ul>
-      {r.description && <p className="xs muted rm-desc">{r.description}</p>}
+      <BarrierBar p={params} say={false} legend={false} />
+      {changes.length > 0 && (
+        <p className="tpl-moved" data-moved>
+          Written for {NOTE_CHAIN_SHORT[noteChainOf(r.params)]}: on {where} it {changes.join(' and ')}.
+        </p>
+      )}
       <div className="rm-foot">
         <span className={`rm-by ${r.author || r.issuedAt ? '' : 'house'}`}>
           {r.issuedAt ? `Issued ${fmtDate(r.issuedAt)}` : r.author ? `by ${short(r.author)}` : 'notes.markets'}
@@ -108,44 +100,53 @@ function Card({ r, onPick, recent = false }: { r: ReadyMade; onPick: (r: ReadyMa
           </span>
         )}
       </div>
-      {r.custom && (
-        <p className="xs muted">
-          A custom workflow: it adds steps beyond the standard payoff. You see its diagram, then issue it.
-        </p>
-      )}
     </>
   );
   return r.custom ? (
-    <Link to={`/issue?custom=${r.id}`} className="rm-card" data-ready={r.id} data-recent={recent || undefined}>
+    <Link
+      to={`/issue?custom=${r.id}`}
+      className="nc tpl"
+      data-ready={r.id}
+      data-recent={recent || undefined}
+      title={r.description}
+    >
       {inner}
     </Link>
   ) : (
     <button
       type="button"
-      className="rm-card"
+      className="nc tpl"
       data-ready={r.id}
       data-recent={recent || undefined}
-      onClick={() => onPick(r)}
+      title={r.description || undefined}
+      onClick={() => onPick({ ...r, params })}
     >
       {inner}
     </button>
   );
 }
 
-/** The notes issued most recently on the current engine: issue one again with its terms and a fresh schedule. */
-export function RecentList({ onPick }: { onPick: (r: ReadyMade) => void }) {
+/** The notes issued most recently on this chain's current engine: issue one again with a fresh schedule. */
+export function RecentList({ chain, onPick }: { chain: string; onPick: (r: ReadyMade) => void }) {
   const { config } = useChains();
   const [recent, setRecent] = useState<Array<{ note: NoteItem; ready: ReadyMade }> | null>(null);
   const [error, setError] = useState('');
-  const engines = config.chains.map((c) => `${c.key}:${c.engine.toLowerCase()}`).join(',');
+  const engines = config.chains
+    .filter((c) => c.key === chain)
+    .map((c) => `${c.key}:${c.engine.toLowerCase()}`)
+    .join(',');
   useEffect(() => {
-    if (!engines) return;
+    if (!engines) {
+      setRecent([]);
+      return;
+    }
     let live = true;
+    setRecent(null);
     const current = new Set(engines.split(','));
     recentReadyMade((n) => {
       const id = parseNoteId(n.id);
       return !!id && current.has(`${id.chain}:${id.engine.toLowerCase()}`);
-    })
+    }, 3)
       .then((x) => live && setRecent(x))
       .catch((e) => {
         if (live) {
@@ -164,17 +165,20 @@ export function RecentList({ onPick }: { onPick: (r: ReadyMade) => void }) {
         {error}
       </div>
     );
-  if (!recent.length) return <p className="xs muted">No notes issued on this engine yet.</p>;
+  if (!recent.length) return null;
   return (
-    <div className="rm-grid" data-recent-list>
-      {recent.map(({ note, ready }) => (
-        <Card key={note.id} r={ready} onPick={onPick} recent />
-      ))}
+    <div className="stack gap-10">
+      <h3 className="iw-sub">Issued recently here</h3>
+      <div className="tpl-grid" data-recent-list>
+        {recent.map(({ note, ready }) => (
+          <Card key={note.id} r={ready} chain={chain} onPick={onPick} recent />
+        ))}
+      </div>
     </div>
   );
 }
 
-export default function ReadyMadeList({ onPick }: { onPick: (r: ReadyMade) => void }) {
+export default function ReadyMadeList({ chain, onPick }: { chain: string; onPick: (r: ReadyMade) => void }) {
   const [saved, setSaved] = useState<ReadyMade[] | null>(null);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState<Set<Filter>>(new Set());
@@ -197,10 +201,10 @@ export default function ReadyMadeList({ onPick }: { onPick: (r: ReadyMade) => vo
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return [...BUILT_IN, ...(saved ?? [])].filter((r) => {
+    const list = [...BUILT_IN, ...(saved ?? [])].filter((r) => {
       const l = listingOf(r.params);
       if (filters.has('yield') && l.goal !== 'yield') return false;
-      if (filters.has('protect') && l.goal !== 'protect') return false; // capital back whatever happens, not only above a barrier
+      if (filters.has('protect') && l.goal !== 'protect') return false;
       if (filters.has('stocks') && l.kind === 'crypto') return false;
       if (filters.has('crypto') && l.kind === 'stocks') return false;
       if (
@@ -208,6 +212,7 @@ export default function ReadyMadeList({ onPick }: { onPick: (r: ReadyMade) => vo
         ![
           r.name,
           r.description,
+          plainName(r.params),
           l.assets,
           r.author ?? 'notes.markets',
           ...r.params.underlyings.map((u) => u.symbol),
@@ -216,8 +221,14 @@ export default function ReadyMadeList({ onPick }: { onPick: (r: ReadyMade) => vo
         return false;
       return true;
     });
-  }, [saved, filters, q]);
-  // A few at first, so the other ways in stay in view; filtering or searching shows every match.
+    // Notes written for this chain first, then the ones that need nothing changed, then the rest.
+    const rank = (r: ReadyMade) =>
+      noteChainOf(r.params) === chain ? 0 : onChain(r.params, chain).changes.length ? 2 : 1;
+    return list
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i)
+      .map((x) => x.r);
+  }, [saved, filters, q, chain]);
   const open = all || filters.size > 0 || !!q.trim();
   const toggle = (f: Filter) =>
     setFilters((s) => {
@@ -256,12 +267,12 @@ export default function ReadyMadeList({ onPick }: { onPick: (r: ReadyMade) => vo
       {shown.length === 0 ? (
         <div className="empty">
           <strong>No ready-made notes match.</strong>
-          <span className="small">Try fewer filters, or build your own below.</span>
+          <span className="small">Try fewer filters, or build your own.</span>
         </div>
       ) : (
-        <div className="rm-grid">
+        <div className="tpl-grid">
           {(open ? shown : shown.slice(0, FIRST)).map((r) => (
-            <Card key={r.id} r={r} onPick={onPick} />
+            <Card key={r.id} r={r} chain={chain} onPick={onPick} />
           ))}
         </div>
       )}

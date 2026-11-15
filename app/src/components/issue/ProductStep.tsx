@@ -43,6 +43,7 @@ export function ProductStep({
   const where = chainCfg?.name ?? chainLabel(chainKey);
   const cash = cashTokenOf(p).token;
   const use = productUses(p.productType);
+  const info = PRODUCTS.find((x) => x.kind === kind);
   const syms = p.underlyings.map((u) => u.symbol);
   const delivered = (s: string) => deliverableToken(p, s)?.token ?? null;
   const physicalOk = syms.every((s) => !!delivered(s));
@@ -71,14 +72,23 @@ export function ProductStep({
     <>
       <h2>
         <span className="iw-ic sm" aria-hidden="true">
-          {PRODUCTS.find((x) => x.kind === kind)?.icon}
+          {info?.icon}
         </span>
-        {PRODUCT_LABELS[p.productType]}
-        {kind === 'worst-of' ? ' on a basket' : ''}
+        {info?.title ?? PRODUCT_LABELS[p.productType]}
+        <small className="iw-tech">{kind === 'worst-of' ? 'Worst-of basket' : PRODUCT_LABELS[p.productType]}</small>
       </h2>
+      <div className="field" id="iw-network" data-issue-network={chainKey}>
+        <span className="lbl">Where it runs</span>
+        {chains.length > 1 ? (
+          <ChainPicker chains={chains} value={chainKey} onPick={onChain} />
+        ) : (
+          <strong>{where}</strong>
+        )}
+        <span className="hint">{chainHint(chainKey)}</span>
+      </div>
       <div className="field">
         <span className="lbl">
-          {kind === 'worst-of' ? `Underlyings (2–${MAX_UNDERLYINGS}): the weakest decides` : 'Underlying'}
+          {kind === 'worst-of' ? `What it's on (2–${MAX_UNDERLYINGS}): the weakest decides` : "What it's on"}
         </span>
         <UnderlyingPicker
           selected={syms}
@@ -98,15 +108,6 @@ export function ProductStep({
           .
         </span>
       </div>
-      <div className="field" data-issue-network={chainKey}>
-        <span className="lbl">Network</span>
-        {chains.length > 1 ? (
-          <ChainPicker chains={chains} value={chainKey} onPick={onChain} />
-        ) : (
-          <strong>{where}</strong>
-        )}
-        <span className="hint">{chainHint(chainKey)}</span>
-      </div>
       {moved && (
         <div className="notice info" role="note" data-moved-to-robinhood>
           These terms named a chain notes do not run on, collateral held where this note's chain takes none, or a token
@@ -116,7 +117,7 @@ export function ProductStep({
       )}
       {kind === 'worst-of' && (
         <div className="field">
-          <label htmlFor="iw-base">Payoff</label>
+          <label htmlFor="iw-base">Kind of note</label>
           <select
             id="iw-base"
             value={p.productType}
@@ -138,7 +139,7 @@ export function ProductStep({
       )}
       {use.knockIn && (
         <div className="field">
-          <span className="lbl">If the price falls through the knock-in barrier, holders get</span>
+          <span className="lbl">Below the money-back line at the end, holders get</span>
           <div className="seg" role="radiogroup" aria-label="Settlement">
             <button
               role="radio"

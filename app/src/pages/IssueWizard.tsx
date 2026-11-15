@@ -1,15 +1,17 @@
 /**
- * Issue, guided. Three ways in, all leading to a review that shows the note's workflow diagram (the BPMN the note is
- * compiled from) before anything is issued: start from a note (one issued recently on this engine, or a ready-made
- * one: its terms filled in, opened at the schedule), the product wizard (a note type, Product → Terms → Schedule →
- * Collateral → Review & issue), or describe it to the AI. Each step asks only what it needs, with defaults; the rest
- * sits under "More options". A custom workflow (a saved one, or the AI's) opens on its own review (?custom=<definition>
- * or ?custom=ai): the diagram, the checks and the issue panel. The advanced editor (/issue/advanced) opens from a
- * review, with that workflow loaded.
+ * Issue, guided. First where the note runs (?chain=, which decides its currency); then one of three ways in: a
+ * ready-made note (or one issued recently on that chain: its terms filled in and moved to that chain, opened at the
+ * schedule), build your own (a note type, Basics → Terms → Schedule → Collateral → Review & issue), or describe it to
+ * the AI. The chosen network stays in view on every step (a chip in the header) and can be changed on Basics. From the
+ * first step on, a live preview shows the card investors will see and a rough risk reading. The review leads with what
+ * investors see and what the issuer commits to, lets the issuer play the note through, and keeps the workflow diagram
+ * under "Under the hood". A custom workflow (a saved one, or the AI's) opens on its own review (?custom=<definition>
+ * or ?custom=ai). The advanced editor (/issue/advanced) opens from a review, with that workflow loaded.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Workflow } from 'lucide-react';
+import '../issue.css';
 import {
   check,
   collateralTokenOf,
@@ -22,6 +24,7 @@ import {
   parseBpmn,
   PRODUCT_LABELS,
   isRemoteCollateral,
+  type NoteChain,
   toChain,
   toIssuanceTerms,
   validateProductParams,
@@ -29,7 +32,6 @@ import {
   type ProductParams,
   type ProductType,
 } from '@sn/core';
-import PayoffChart from '../components/PayoffChart';
 import type { Built, DocInfo, IssuePreset } from '../components/Stages';
 import { CollateralStep } from '../components/issue/CollateralStep';
 import { IssueChooser } from '../components/issue/IssueChooser';
@@ -39,6 +41,8 @@ import { issueSchedule, type Every } from '../components/issue/schedule';
 import { ScheduleStep } from '../components/issue/ScheduleStep';
 import { TermsStep } from '../components/issue/TermsStep';
 import { WizardHeader } from '../components/issue/WizardHeader';
+import { ChainChip } from '../components/issue/ChainPicker';
+import { IssuePreview } from '../components/issue/Preview';
 import { DEMO_TSLA, PRODUCTS, STEPS, type Kind } from '../components/issue/wizard-data';
 import {
   AI_DRAFT_KEY,
@@ -72,19 +76,32 @@ export default function IssueWizard() {
   // ?demo=tsla: the recorded demo's terms, every field filled in (a TSLA reverse convertible on Robinhood Chain, TSLA
   // and USDG pledged into the note, a minutes-apart schedule): the presenter only clicks Continue and signs.
   const demoTsla = kind === 'reverse-convertible' && search.get('demo') === 'tsla';
+  // The network picked first (on the entry page, or carried along from step to step).
+  const issuable = issueChains(config);
+  const askedChain = search.get('chain');
+  const urlChain: NoteChain | null =
+    askedChain && isNoteChain(askedChain) && issuable.some((c) => c.key === askedChain)
+      ? askedChain
+      : issuable.length === 1 && isNoteChain(issuable[0].key)
+        ? issuable[0].key
+        : null;
+  /** Terms moved to the network picked first (kept as they are when none is picked). */
+  const onUrlChain = (q: ProductParams) => (urlChain && noteChainOf(q) !== urlChain ? toChain(q, urlChain) : q);
   // What can be filled in at once (a note type, a built-in, the AI's reading); a saved note loads in the effect below.
   const [init] = useState(() => {
     const hit = kind && ready && ready !== 'ai' ? readyMade(ready) : null;
     const ai = kind && ready === 'ai' ? loadAiReading() : null;
-    if (hit && !(hit instanceof Promise)) return { p: hit.params, from: hit, ai, shown: key };
-    if (ai) return { p: ai.params, from: null, ai, shown: key };
+    if (hit && !(hit instanceof Promise)) {
+      const moved = onUrlChain(hit.params);
+      return { p: moved, from: { ...hit, params: moved }, ai, shown: key };
+    }
+    if (ai) return { p: onUrlChain(ai.params), from: null, ai, shown: key };
     if (demoTsla) return { p: DEMO_TSLA, from: null, ai: null, shown: key };
-    return { p: start(kind ?? 'phoenix'), from: null, ai: null, shown: kind && !ready ? key : null };
+    return { p: onUrlChain(start(kind ?? 'phoenix')), from: null, ai: null, shown: kind && !ready ? key : null };
   });
   // Notes run on Robinhood Chain testnet or Base Sepolia. Terms opened from elsewhere (e.g. saved by the earlier
   // Arbitrum build, or delivering an underlying with no token on their chain) are adjusted as they load
   // (toIssuanceTerms), and the issuer is told; terms for a chain this deployment does not serve move to one it does.
-  const issuable = issueChains(config);
   const toServed = (q: ProductParams): ProductParams => {
     const c = noteChainOf(q);
     const first = issuable[0]?.key;
@@ -124,7 +141,7 @@ export default function IssueWizard() {
     init.ai?.schedule ? { n: init.ai.schedule.every, unit: init.ai.schedule.unit } : { n: 3, unit: 'minutes' },
   );
   const applyAi = (r: AiReading) => {
-    setP(r.params);
+    setP(onUrlChain(r.params));
     setFrom(null);
     setAiNotes(r.notes ?? []);
     if (r.schedule) {
@@ -139,7 +156,7 @@ export default function IssueWizard() {
     let live = true;
     setLost('');
     if (!ready) {
-      setP(start(kind!));
+      setP(onUrlChain(start(kind!)));
       setFrom(null);
       setAiNotes([]);
       setShown(key);
@@ -164,8 +181,9 @@ export default function IssueWizard() {
         nav(`/issue?custom=${r.id}`, { replace: true });
         return;
       }
-      setP(r.params);
-      setFrom(r);
+      const moved = onUrlChain(r.params);
+      setP(moved);
+      setFrom({ ...r, params: moved });
       setAiNotes([]);
       if (r.size) setSize(r.size);
       setShown(key);
@@ -176,9 +194,16 @@ export default function IssueWizard() {
       live = false;
     };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Every address keeps the network, so Back walks through the steps and to the entry page with it still picked.
   const go = (k: Kind | null, s = 0) =>
-    setSearch(k ? { ...(ready ? { ready } : {}), product: k, step: String(s) } : {});
+    setSearch({
+      ...(chainKey ? { chain: chainKey } : {}),
+      ...(k ? { ...(ready ? { ready } : {}), product: k, step: String(s) } : {}),
+    });
   const setStep = (s: number) => go(kind, s);
+  // The furthest step reached (a ready-made note opens at the schedule): every step up to it can be reopened.
+  const [reached, setReached] = useState(step);
+  useEffect(() => setReached((r) => (key === shown ? Math.max(r, step) : step)), [step, key]); // eslint-disable-line react-hooks/exhaustive-deps
   const [timing, setTiming] = useState<{ lag: number; grace: number } | null>(
     demoTsla ? { lag: 60, grace: 120 } : null,
   );
@@ -215,31 +240,36 @@ export default function IssueWizard() {
   const custom = search.get('custom');
   if (custom) return <CustomReview key={custom} source={custom} />;
 
+  // The entry page: the network is picked first; every way in starts on it.
+  const picked = urlChain ?? '';
+  const setPicked = (k: string) => setSearch({ chain: k }, { replace: true });
+  const onPicked = (q: ProductParams) => (isNoteChain(picked) ? toChain(q, picked) : q);
   const choose = (k: Kind) => {
-    // A new note type keeps the network picked so far.
-    setP(isNoteChain(chainKey) ? toChain(start(k), chainKey) : start(k));
+    setP(onPicked(start(k)));
     setFrom(null);
     setAiNotes([]);
     setShown(`k:${k}`);
-    setSearch({ product: k, step: '0' });
+    setSearch({ chain: picked, product: k, step: '0' });
   };
   const pick = (r: ReadyMade) => {
     if (r.custom) {
       nav(`/issue?custom=${r.id}`);
       return;
     }
-    setP(r.params);
-    setFrom(r);
+    const moved = onPicked(r.params);
+    setP(moved);
+    setFrom({ ...r, params: moved });
     setAiNotes([]);
     if (r.size) setSize(r.size);
     setShown(`r:${r.id}`);
-    setSearch({ ready: r.id, product: kindOf(r.params), step: '2' });
+    setSearch({ chain: picked, ready: r.id, product: kindOf(r.params), step: '2' });
   };
   const fromAi = (r: AiReading) => {
-    saveAiReading(r);
-    applyAi(r);
+    const moved = { ...r, params: onPicked(r.params) };
+    saveAiReading(moved);
+    applyAi(moved);
     setShown('r:ai');
-    setSearch({ ready: 'ai', product: kindOf(r.params), step: '1' });
+    setSearch({ chain: picked, ready: 'ai', product: kindOf(r.params), step: '1' });
   };
   const aiWorkflow = (xml: string) => {
     try {
@@ -263,6 +293,15 @@ export default function IssueWizard() {
   const colToken = (c: CollateralSymbol) => collateralTokenOf(p, c)?.token ?? null;
   const sym = config.chains.find((c) => c.key === chainKey)?.stablecoin.symbol ?? 'USD';
   const { demo, t, timingBad, strikeAt, dateOf, fmtT, dur } = issueSchedule(every, strikeIn, timing, eco);
+  const schedule = {
+    strikeDate: strikeAt,
+    obsDates: Array.from({ length: Math.max(0, Math.min(12, p.observations || 0)) }, (_, i) => dateOf(i + 1)),
+  };
+  /** "Change" on the chain chip: back to Basics, where the network is picked. */
+  const changeChain = () => {
+    if (step !== 0) setStep(0);
+    setTimeout(() => document.getElementById('iw-network')?.scrollIntoView({ block: 'center' }), 50);
+  };
 
   const doc: DocInfo = {
     name: p.name,
@@ -283,7 +322,18 @@ export default function IssueWizard() {
 
   // ---- the chooser: three ways in --------------------------------------------------------------------------------
   if (!kind) {
-    return <IssueChooser pick={pick} choose={choose} fromAi={fromAi} aiWorkflow={aiWorkflow} />;
+    return (
+      <IssueChooser
+        chains={issuable}
+        chain={urlChain}
+        setChain={setPicked}
+        ai={config.ai}
+        pick={pick}
+        choose={choose}
+        fromAi={fromAi}
+        aiWorkflow={aiWorkflow}
+      />
+    );
   }
 
   if (key !== shown) {
@@ -316,6 +366,9 @@ export default function IssueWizard() {
         title={from ? from.name : (PRODUCTS.find((x) => x.kind === kind)?.title ?? PRODUCT_LABELS[p.productType])}
         step={step}
         setStep={setStep}
+        reached={reached}
+        back={chainKey ? `/issue?chain=${chainKey}` : '/issue'}
+        chip={<ChainChip chain={chainCfg} onChange={issuable.length > 1 ? changeChain : undefined} />}
       />
 
       {from && step < 4 && (
@@ -345,7 +398,7 @@ export default function IssueWizard() {
           )}
         </div>
       )}
-      <div className={`iw-body ${step === 1 || step === 4 ? 'with-side' : ''}`}>
+      <div className={`iw-body ${step < 4 ? 'with-side' : ''}`}>
         <section className="card iw-step">
           {step === 0 && (
             <ProductStep
@@ -359,7 +412,7 @@ export default function IssueWizard() {
             />
           )}
 
-          {step === 1 && <TermsStep p={p} set={set} errors={errors} />}
+          {step === 1 && <TermsStep p={p} set={set} errors={errors} schedule={schedule} />}
 
           {step === 2 && (
             <ScheduleStep
@@ -418,6 +471,8 @@ export default function IssueWizard() {
               doc={doc}
               preset={preset}
               xml={reviewXml}
+              chainKey={chainKey}
+              schedule={schedule}
             />
           )}
 
@@ -428,7 +483,7 @@ export default function IssueWizard() {
                 Back
               </button>
             ) : (
-              <button className="btn" onClick={() => go(null)}>
+              <button className="btn" onClick={() => go(null)} data-back-to-issue>
                 <ArrowLeft className="i" />
                 Back to Issue
               </button>
@@ -448,11 +503,8 @@ export default function IssueWizard() {
           </div>
         </section>
 
-        {(step === 1 || step === 4) && (
-          <aside className="card iw-side" aria-label="Payoff">
-            <span className="label">Payout per 100 at maturity</span>
-            {errors.length ? <p className="xs muted">Fix the terms to see the payoff.</p> : <PayoffChart params={p} />}
-          </aside>
+        {step < 4 && (
+          <IssuePreview p={p} cash={sym} chainKey={chainKey} schedule={schedule} size={step >= 2 ? size : undefined} />
         )}
       </div>
     </main>
