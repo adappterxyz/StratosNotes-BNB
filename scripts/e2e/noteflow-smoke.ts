@@ -7,8 +7,8 @@
  *
  * Note page (the newest note on the current engine): expand the diagram, click a step and see its values, open full
  * screen and close it with Esc (focus back on the button), and at 400 px no horizontal page scroll. Issue: the three
- * ways in and no blank-canvas entry; a recent note opens the wizard prefilled; /issue/advanced with nothing loaded
- * points back to the ways in. SHOT_DIR=/path saves screenshots of the diagram (desktop and 400 px).
+ * ways in, after the network is picked, with no blank-canvas entry; a recent note opens the wizard prefilled;
+ * /issue/advanced with nothing loaded goes back to Issue. SHOT_DIR=/path saves screenshots of the diagram (desktop and 400 px).
  */
 import { chromium } from 'playwright';
 const APP = process.env.APP_URL ?? 'http://127.0.0.1:5391';
@@ -42,6 +42,7 @@ const note = (notes as Array<{ id: string; view: { createdAt: number; activeStep
 check(!!note, `a note on the current engine: ${note?.id}`);
 
 await page.goto(`${APP}/note/${encodeURIComponent(note.id)}`);
+await page.locator('[data-tab="flow"]').click(); // the diagram lives under Details, "How it runs"
 const toggle = page.locator('[data-noteflow-toggle]');
 await toggle.waitFor();
 if ((await toggle.getAttribute('aria-expanded')) === 'true') await toggle.click(); // start collapsed
@@ -122,6 +123,7 @@ check(
 );
 // Remembered per viewer.
 await page.reload();
+await page.locator('[data-tab="flow"]').click();
 await page.locator('[data-noteflow-toggle]').waitFor();
 check(
   (await page.locator('[data-noteflow-toggle]').getAttribute('aria-expanded')) === 'true',
@@ -143,40 +145,47 @@ await page.waitForTimeout(300);
 await page.locator('[data-close-fullscreen]').click();
 check(!(await dialog.evaluate((d) => (d as HTMLDialogElement).open)), 'the Close button closes full screen');
 
-// ---- Issue: three ways in -------------------------------------------------------------------------------------
+// ---- Issue: the network first, then three ways in --------------------------------------------------------------
 await page.setViewportSize({ width: 1280, height: 900 });
 await page.goto(`${APP}/issue`);
-await page.locator('[data-door="describe"]').waitFor();
-for (const d of ['from', 'wizard', 'describe'])
+const chainCards = page.locator('[data-chain-cards] [data-chain]');
+await chainCards.first().waitFor();
+check((await chainCards.count()) === cfg.chains.length, 'Issue asks first where the note runs (one card per network)');
+check(
+  (await page.locator('[data-door]').count()) === 0 || cfg.chains.length === 1,
+  'no way in before a network is picked',
+);
+await chainCards.first().click();
+await page.locator('[data-door="from"]').waitFor();
+for (const d of ['from', 'wizard', ...(cfg.ai ? ['describe'] : [])])
   check((await page.locator(`[data-door="${d}"]`).count()) === 1, `Issue shows the way in: ${d}`);
+check(
+  (await page.locator('[data-door="from"]').getAttribute('aria-selected')) === 'true',
+  'a ready-made note is the way in shown first',
+);
 const body = await page.locator('main').innerText();
 check(!/blank/i.test(body), 'no blank workflow / blank canvas entry');
 check((await page.locator('main a[href*="/issue/advanced"]').count()) === 0, 'no link to an empty advanced editor');
 const recent = page.locator('[data-recent]').first();
 await recent.waitFor();
-const recentName = (await recent.locator('strong').first().innerText()).trim();
 await recent.click();
 await page.locator('[data-started-from]').waitFor();
 check(
-  /ready=note%3A|ready=note:/.test(page.url()) && /step=2/.test(page.url()),
-  'a recent note opens the wizard at the schedule',
+  /ready=note%3A|ready=note:/.test(page.url()) && /step=2/.test(page.url()) && /chain=/.test(page.url()),
+  'a recent note opens the wizard at the schedule, on the network picked',
 );
-check(
-  (await page.locator('[data-started-from]').innerText()).includes(recentName),
-  `the wizard says it started from ${recentName}, terms filled in`,
-);
+check((await page.locator('[data-chain-chip]').count()) === 1, 'the network stays in view (the chain chip)');
+check((await page.locator('[data-issue-preview]').count()) === 1, 'a live preview of what investors will see');
 for (let i = 0; i < 2; i++) await page.getByRole('button', { name: /^Continue: / }).click();
+await page.locator('[data-review-flow] summary').click(); // "Under the hood"
 await page.locator('[data-review-flow] .fm-canvas .djs-element[tabindex="0"]').first().waitFor();
-check(true, "the review shows the note's workflow diagram");
+check(true, "the review shows the note's workflow diagram under the hood");
 check((await page.locator('[data-open-advanced]').count()) === 1, 'the review offers Open in advanced editor');
 
-// ---- the advanced editor with nothing loaded --------------------------------------------------------------------
+// ---- the advanced editor with nothing loaded: back to Issue -----------------------------------------------------
 await page.goto(`${APP}/issue/advanced`);
-await page.locator('[data-advanced-empty]').waitFor();
-check(
-  (await page.locator('.ws-start a[href*="/issue"]').count()) === 3,
-  '/issue/advanced, nothing loaded: points to the three ways in',
-);
+await page.waitForURL(/\/issue(\?|$)/);
+check(!/\/issue\/advanced/.test(page.url()), '/issue/advanced with nothing loaded goes back to Issue');
 check((await page.getByRole('button', { name: /blank/i }).count()) === 0, 'and offers no blank workflow');
 
 check(!errs.length, `no page errors${errs.length ? `: ${errs.join('; ')}` : ''}`);

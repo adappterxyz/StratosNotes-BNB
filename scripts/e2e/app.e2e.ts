@@ -107,11 +107,16 @@ async function verifyIfAsked(page: Page, email: string) {
   return true;
 }
 async function issueOne(page: Page): Promise<string> {
-  // The guided issue flow: pick the product, then Product -> Terms -> Schedule -> Collateral -> Review & issue.
-  await page.goto(`${APP}/issue`);
+  // The guided issue flow: the network first (picked already when the deployment serves one), "Build your own", the
+  // product, then Basics -> Terms -> Schedule -> Collateral -> Review & issue.
+  await page.goto(`${APP}/issue#wizard`);
+  const chains = page.locator('[data-chain-cards] [data-chain]');
+  await chains.first().waitFor();
+  if (!(await page.locator('[data-chain-cards] [aria-checked="true"]').count())) await chains.first().click();
+  await page.locator('[data-door="wizard"]').click();
   await page.locator('[data-product="phoenix"]').click();
   const next = () => page.getByRole('button', { name: /^Continue: / }).click();
-  await next(); // Product (ETH, cash settlement: the defaults)
+  await next(); // Basics (ETH, cash settlement: the defaults)
   await next(); // Terms
   await page.locator('#is-size').fill('1000');
   await page.locator('#is-strike').fill('4');
@@ -514,6 +519,8 @@ try {
   );
   await page.screenshot({ path: 'deployments/local/dev/e2e-portfolio.png' });
   await page.goto(`${APP}/note/${encodeURIComponent(paidId)}`);
+  // A holder finds the collateral and payment schedule under Details (the issuer sees it beside the summary).
+  await page.locator('[data-tab="money"]').click();
   await page.locator('[data-economics]').waitFor();
   await page.screenshot({ path: 'deployments/local/dev/e2e-paid.png', fullPage: true });
 } catch (e) {
