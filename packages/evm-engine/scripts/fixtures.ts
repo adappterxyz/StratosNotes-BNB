@@ -19,11 +19,13 @@ import {
 /** Block time the Foundry test starts each run at (fixed, so dates can be baked in). */
 export const T0 = 1_900_000_000;
 const LAG = 10, GRACE = 20, STEP = 100;
-const STRIKES: Record<string, number> = { ETH: 2000, BTC: 60000, SOL: 150, AMZN: 200, TSLA: 250, EUR: 1.16, JPY: 0.0064, XAU: 2650 };
-/** The mock tokens test/Products.t.sol deploys for the real ones the notes name (USDG, WETH, Robinhood's AMZN and
- * TSLA), with the same decimals. */
-const TOKEN_ID: Record<string, number> = { USDG: 1, WETH: 2, AMZN: 3, TSLA: 4 };
-const DECIMALS: Record<number, number> = { 1: 6, 2: 18, 3: 18, 4: 18 };
+/** TSLAc, a B20 stock (one token = MULT_TSLA shares), is priced per token: the share's price x its multiplier. */
+const MULT_TSLA = 1.25;
+const STRIKES: Record<string, number> = { ETH: 2000, BTC: 60000, SOL: 150, AMZN: 200, TSLA: 250, EUR: 1.16, JPY: 0.0064, XAU: 2650, TSLAc: 250 * MULT_TSLA };
+/** The mock tokens test/Products.t.sol deploys for the real ones the notes name (USDG and USDC, WETH, Robinhood's
+ * AMZN and TSLA, the TSLAc B20 stand-in on Base), with the same decimals. */
+const TOKEN_ID: Record<string, number> = { USDG: 1, USDC: 1, WETH: 2, AMZN: 3, TSLA: 4, TSLAc: 5 };
+const DECIMALS: Record<number, number> = { 1: 6, 2: 18, 3: 18, 4: 18, 5: 8 };
 /** The mock token a delivered underlying or a collateral symbol uses on the note's chain. */
 const deliverId = (p: ProductParams, sym: string) => TOKEN_ID[deliverableToken(p, sym)!.token];
 const collateralId = (p: ProductParams, sym: string) => TOKEN_ID[collateralTokenOf(p, sym as 'USD')!.token];
@@ -40,6 +42,8 @@ interface Run {
   pledgeCover?: number;
   /** Fund each payment in two deposits. */
   split?: boolean;
+  /** B20 multipliers at maturity, by underlying (a physically settled Base note delivers shares / multiplier). */
+  multiplier?: Record<string, number>;
 }
 const seed = (part: string) => SEED_TEMPLATES.find(t => t.name.includes(part))!.source;
 const ETH_BTC: ProductParams = { ...EXAMPLE_PRODUCTS.fcn, name: '12M Worst-of FCN on ETH, BTC', underlyings: [FEEDS.ETH, FEEDS.BTC] };
@@ -51,6 +55,9 @@ const ETH_COLLATERAL: ProductParams = { ...EXAMPLE_PRODUCTS.phoenix, name: '12M 
 const EUR_PHOENIX: ProductParams = { ...EXAMPLE_PRODUCTS.phoenix, name: '12M Phoenix on EUR/USD', underlyings: [FEEDS.EUR] };
 const JPY_RC: ProductParams = { ...EXAMPLE_PRODUCTS['reverse-convertible'], name: '12M Reverse Convertible on JPY/USD', underlyings: [FEEDS.JPY] };
 const FX_GOLD_STOCK: ProductParams = { ...EXAMPLE_PRODUCTS.fcn, name: '12M Worst-of FCN on EUR, XAU, TSLA', underlyings: [FEEDS.EUR, FEEDS.XAU, FEEDS.TSLA] };
+// A Base note on TSLA, physically settled in TSLAc (the B20 stand-in, multiplier 1.25: 0.8 token per share owed), and
+// backed by TSLAc pledged into the note, valued per token (Chainlink's per-token feed: share price x multiplier).
+const BASE_TSLA: ProductParams = { ...EXAMPLE_PRODUCTS.fcn, name: '12M FCN on TSLA (Base), physical in TSLAc, TSLAc collateral', chain: 'base-sepolia', underlyings: [FEEDS.TSLA], settlement: 'physical', collateral: [{ symbol: 'TSLAc', haircutPct: 60 }], collateralRatioPct: 50 };
 const MIXED_COLLATERAL: ProductParams = { ...EXAMPLE_PRODUCTS.fcn, name: '12M FCN on ETH, USD + ETH collateral', collateral: [{ symbol: 'USD', haircutPct: 100 }, { symbol: 'ETH', haircutPct: 70 }], collateralRatioPct: 40 };
 
 const RUNS: Run[] = [
@@ -94,6 +101,11 @@ const RUNS: Run[] = [
   { type: 'fcn', params: MIXED_COLLATERAL, label: 'mixed collateral, misses coupon 2 -> default (capped)', path: [90, 95, 80, 50], investors: [600, 400], colPath: { ETH: [100, 100, 100, 100, 100] }, pledgeCover: 1.2, behaviour: { missPayment: 2 } },
   // The same under 'all-to-holders': both collateral assets go to the holders in kind, pro rata.
   { type: 'fcn', params: { ...MIXED_COLLATERAL, defaultRule: 'all-to-holders' }, label: 'mixed collateral, misses coupon 2 -> default (all to holders)', path: [90, 95, 80, 50], investors: [600, 400], colPath: { ETH: [100, 100, 100, 100, 100] }, pledgeCover: 1.2, behaviour: { missPayment: 2 } },
+  // ---- Base stocks (docs/BASE-STOCKS.md): appended last, so the indexes other tests use stay put. ----------------
+  // Base: knocked in at maturity, each holder receives units / strike / multiplier TSLAc; TSLAc collateral released.
+  { type: 'fcn', params: BASE_TSLA, label: 'B20 delivery', path: [90, 95, 80, 50], investors: [700, 300], colPath: { TSLAc: [100, 100, 100, 100, 100] }, pledgeCover: 1.1, multiplier: { TSLA: MULT_TSLA } },
+  // The same note missing coupon 2: default, the TSLAc collateral to the holders in kind (capped at what they are owed).
+  { type: 'fcn', params: BASE_TSLA, label: 'B20 collateral, misses coupon 2 -> default', path: [90, 95, 80, 50], investors: [600, 400], colPath: { TSLAc: [100, 90, 80, 80, 80] }, pledgeCover: 1.5, behaviour: { missPayment: 2 }, multiplier: { TSLA: MULT_TSLA } },
 ];
 
 const paramsOf = (r: Run) => r.params ?? EXAMPLE_PRODUCTS[r.type];
@@ -195,7 +207,7 @@ function fixture(run: Run, idx: number) {
   }
   const ref = simulateNote(run.refParams ?? p, {
     perfs, sold, ratio,
-    worstAtMaturity: p.settlement === 'physical' ? { symbol: unds[worst].symbol, strike: strikes[worst] } : undefined,
+    worstAtMaturity: p.settlement === 'physical' ? { symbol: unds[worst].symbol, strike: strikes[worst], multiplier: run.multiplier?.[unds[worst].symbol] } : undefined,
     collateral: pledged.map(x => ({ symbol: x.symbol, amount: x.amount, haircut: x.haircut, prices: Array.from({ length: n + 1 }, (_, k) => colPx(x.symbol, k)) })),
     behaviour: behaviour.marginCall ? { ...behaviour, marginCall: { period: behaviour.marginCall.period, ...(behaviour.marginCall.topUp ? { topUp: topUps } : {}) } } : behaviour,
     feePerCoupon: run.paFee ? notional / 1000 : undefined,
@@ -226,6 +238,7 @@ function fixture(run: Run, idx: number) {
     const out: Record<string, number> = {};
     unds.forEach((u, i) => { out[basket ? (k === 0 ? `initialLevel_${u.symbol}` : `obs${k}_${u.symbol}`) : (k === 0 ? 'initialLevel' : `obs${k}`)] = k === 0 ? strikes[i] : path[k - 1][i]; });
     for (const x of pledged) if (x.symbol !== 'USD') out[`px_${x.symbol}`] = colPx(x.symbol, k);
+    if (k === n) for (const [sym, m] of Object.entries(run.multiplier ?? {})) out[`mult_${sym}`] = m;
     return out;
   };
   const issuerStep = (t: number, step: string, token: number, base: bigint, amountFixed: bigint): Action =>

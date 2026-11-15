@@ -70,8 +70,10 @@ abstract contract ProductsBase is Test {
     FlowEngine engine;
     address forwarder = makeAddr("forwarder");
     address admin = makeAddr("admin");
-    MockERC20[5] tokens; // stand-ins for the real tokens: 1 USDG, 2 WETH, 3 AMZN, 4 TSLA
-    uint8[5] decimals = [0, 6, 18, 18, 18];
+    /// Stand-ins for the real tokens: 1 USDG (also USDC: same decimals), 2 WETH, 3 AMZN, 4 TSLA, 5 TSLAc (a B20
+    /// stock on Base, 8 decimals; BaseStocks.t.sol swaps in the B20StandIn contract itself).
+    MockERC20[6] tokens;
+    uint8[6] decimals = [0, 6, 18, 18, 18, 8];
     uint256 t0;
     bytes[] fixtures;
     uint256 maxReportGas;
@@ -92,6 +94,7 @@ abstract contract ProductsBase is Test {
         tokens[2] = new MockERC20("WETH", 18);
         tokens[3] = new MockERC20("AMZN", 18);
         tokens[4] = new MockERC20("TSLA", 18);
+        tokens[5] = new MockERC20("TSLAc", 8);
         string memory json = vm.readFile("test/fixtures/products.json");
         t0 = vm.parseJsonUint(json, ".t0");
         bytes[] memory runs = vm.parseJsonBytesArray(json, ".runs");
@@ -180,7 +183,7 @@ abstract contract ProductsBase is Test {
         vm.prank(issuer);
         pid = engine.startProcess(id, 1, _roles(issuer, pa), _assetTokens(f), f.startStep, _none(), "Note", "NOTE");
         vm.startPrank(issuer);
-        for (uint256 t = 1; t < 5; t++) tokens[t].approve(address(engine), type(uint256).max);
+        for (uint256 t = 1; t < tokens.length; t++) tokens[t].approve(address(engine), type(uint256).max);
         for (uint256 k = 0; k < f.pledges.length; k++) tokens[f.pledges[k].token].mint(issuer, f.pledges[k].base);
         engine.executeStep(pid, f.approveStep, NO, f.approveInputs);
         engine.executeStep(pid, f.mandateStep, NO, _none());
