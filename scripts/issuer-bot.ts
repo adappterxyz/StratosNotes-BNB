@@ -94,6 +94,8 @@ import {
   CHAINS,
   engineAbi,
   EvmAdapter,
+  scanLogs,
+  type LogRange,
   issuerActions,
   lensAbi,
   noteId,
@@ -207,6 +209,8 @@ const MAX = 2n ** 256n - 1n;
 /** Push rounds not settled yet: `${pid}:${asset}` -> period, from DistributionRecorded / DistributionSettled. */
 const openRounds = new Map<string, bigint>();
 let pushFrom = BigInt(env('FROM_BLOCK', '0'));
+/** The widest eth_getLogs span this bot's RPC accepts, once it has refused one (scanLogs). */
+const logRange: LogRange = {};
 
 /** Holders of a note's units, paged through the lens. */
 async function holdersOf(pid: bigint): Promise<readonly Address[]> {
@@ -260,21 +264,34 @@ async function pushOwed(pid: bigint, asset: number, min: bigint, what: string) {
 async function scanRounds() {
   const head = await client.getBlockNumber();
   if (head >= pushFrom) {
+    // In spans the RPC accepts: the first scan runs from FROM_BLOCK, which can be millions of blocks back.
     const [rec, settled] = await Promise.all([
-      client.getContractEvents({
-        address: engine,
-        abi: engineAbi,
-        eventName: 'DistributionRecorded',
-        fromBlock: pushFrom,
-        toBlock: head,
-      }),
-      client.getContractEvents({
-        address: engine,
-        abi: engineAbi,
-        eventName: 'DistributionSettled',
-        fromBlock: pushFrom,
-        toBlock: head,
-      }),
+      scanLogs(
+        pushFrom,
+        head,
+        (fromBlock, toBlock) =>
+          client.getContractEvents({
+            address: engine,
+            abi: engineAbi,
+            eventName: 'DistributionRecorded',
+            fromBlock,
+            toBlock,
+          }),
+        logRange,
+      ),
+      scanLogs(
+        pushFrom,
+        head,
+        (fromBlock, toBlock) =>
+          client.getContractEvents({
+            address: engine,
+            abi: engineAbi,
+            eventName: 'DistributionSettled',
+            fromBlock,
+            toBlock,
+          }),
+        logRange,
+      ),
     ]);
     const all = [...rec.map((l) => ({ l, open: true })), ...settled.map((l) => ({ l, open: false }))].sort(
       (a, b) => Number(a.l.blockNumber - b.l.blockNumber) || a.l.logIndex - b.l.logIndex,

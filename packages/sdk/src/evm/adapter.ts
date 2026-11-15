@@ -28,6 +28,7 @@ import {
   type NoteState,
 } from '../model';
 import { decodeEngineLog, fieldValue } from './decode';
+import { scanLogs, type LogRange } from './logs';
 import { ENGINE_V3, ENGINE_V4, flowEngineV3Abi, type EngineVersion } from './abi-v3';
 import { flowEngineAbi, noteTokenAbi, notesLensAbi } from './generated';
 import { bytesToHex, hexToBytes, tagOf } from './state';
@@ -74,6 +75,8 @@ const numberOf = (v: FieldValue | undefined) => (v && v.tag === 1 ? BigInt(v.val
 
 export class EvmAdapter implements ChainAdapter<WalletClient> {
   private defs = new Map<string, Promise<WorkflowDef | null>>();
+  /** The widest eth_getLogs span this RPC accepts, once it has refused one (scanLogs). */
+  private logRange: LogRange = {};
 
   constructor(
     readonly chain: ChainInfo,
@@ -92,6 +95,12 @@ export class EvmAdapter implements ChainAdapter<WalletClient> {
   runs(id: NoteId): boolean {
     const p = parseNoteId(id);
     return !!p && p.chain === this.chain.key && p.engine === this.dep.engine.toLowerCase();
+  }
+
+  /** Logs from the deployment block to the head, in spans the RPC accepts. */
+  private async logsSinceDeploy<T>(get: (fromBlock: bigint, toBlock: bigint) => Promise<T[]>): Promise<T[]> {
+    const head = await this.client.getBlockNumber();
+    return scanLogs(this.dep.fromBlock ?? 0n, head, get, this.logRange);
   }
 
   private pidOf(id: NoteId): bigint {
@@ -153,12 +162,9 @@ export class EvmAdapter implements ChainAdapter<WalletClient> {
     if (!def) return null;
     const tokens = await this.client.readContract({ ...e, functionName: 'tokensOf', args: [pid] });
     // Every account the note has had: from its HoldingChanged logs (units and cash alike).
-    const changed = await this.client.getContractEvents({
-      ...e,
-      eventName: 'HoldingChanged',
-      args: { pid },
-      fromBlock: this.dep.fromBlock ?? 0n,
-    });
+    const changed = await this.logsSinceDeploy((fromBlock, toBlock) =>
+      this.client.getContractEvents({ ...e, eventName: 'HoldingChanged', args: { pid }, fromBlock, toBlock }),
+    );
     const holders = [...new Set(changed.map((l) => (l.args.owner as Address).toLowerCase()))] as Address[];
     const roles = await Promise.all(
       def.roles.map((_, i) => this.client.readContract({ ...e, functionName: 'roleOf', args: [pid, BigInt(i)] })),
@@ -184,19 +190,13 @@ export class EvmAdapter implements ChainAdapter<WalletClient> {
       }
     }
     const fallback = (await this.client.readContract({ ...e, functionName: 'fallbackReporter' })).toLowerCase();
-    const reports = await this.client.getContractEvents({
-      ...e,
-      eventName: 'ReportProcessed',
-      args: { pid },
-      fromBlock: this.dep.fromBlock ?? 0n,
-    });
+    const reports = await this.logsSinceDeploy((fromBlock, toBlock) =>
+      this.client.getContractEvents({ ...e, eventName: 'ReportProcessed', args: { pid }, fromBlock, toBlock }),
+    );
     // Economic milestones (payment made, missed, defaulted, ...): the payment schedule's status reads them.
-    const marks = await this.client.getContractEvents({
-      ...e,
-      eventName: 'Milestone',
-      args: { pid },
-      fromBlock: this.dep.fromBlock ?? 0n,
-    });
+    const marks = await this.logsSinceDeploy((fromBlock, toBlock) =>
+      this.client.getContractEvents({ ...e, eventName: 'Milestone', args: { pid }, fromBlock, toBlock }),
+    );
     const blockTime = new Map<bigint, number>();
     for (const m of marks)
       if (!blockTime.has(m.blockNumber))
@@ -255,17 +255,21 @@ export class EvmAdapter implements ChainAdapter<WalletClient> {
     const pid = this.pidOf(id);
     // Every note event has the pid as its first indexed topic.
     const pidTopic = `0x${pid.toString(16).padStart(64, '0')}` as Hex;
-    const raw = (await this.client.request({
-      method: 'eth_getLogs',
-      params: [
-        {
-          address: this.dep.engine,
-          fromBlock: numberToHex(this.dep.fromBlock ?? 0n),
-          toBlock: 'latest',
-          topics: [null, pidTopic],
-        },
-      ],
-    } as never)) as Array<{ data: Hex; topics: Hex[]; blockNumber: Hex; transactionHash: Hex }>;
+    type RawLog = { data: Hex; topics: Hex[]; blockNumber: Hex; transactionHash: Hex };
+    const raw = await this.logsSinceDeploy(
+      async (fromBlock, toBlock) =>
+        (await this.client.request({
+          method: 'eth_getLogs',
+          params: [
+            {
+              address: this.dep.engine,
+              fromBlock: numberToHex(fromBlock),
+              toBlock: numberToHex(toBlock),
+              topics: [null, pidTopic],
+            },
+          ],
+        } as never)) as RawLog[],
+    );
     const logs = raw.map((l) => ({ ...l, blockNumber: BigInt(l.blockNumber) }));
     const fallback = (
       await this.client.readContract({ address: this.dep.engine, abi: flowEngineAbi, functionName: 'fallbackReporter' })
