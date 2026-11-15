@@ -1,20 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { Briefcase, LayoutGrid, Mail, Menu, Moon, PenTool, Sun, X } from 'lucide-react';
+import { Briefcase, LayoutGrid, Mail, Moon, PenTool, Settings2, Sun } from 'lucide-react';
 import Marketplace from './pages/Marketplace';
 import OfferingPage from './pages/Offering';
 import Portfolio from './pages/Portfolio';
 import IssueWizard from './pages/IssueWizard';
 import Workspace from './pages/Workspace';
 import AlertsPage, { AlertsConfirm, AlertsUnsubscribe } from './pages/Alerts';
-import FaucetButton from './components/FaucetButton';
+import FaucetButton, { TestnetTokens } from './components/FaucetButton';
+import { ToastProvider } from './components/Toast';
 import RoleSwitch from './components/RoleSwitch';
 import { useChains } from './lib/chains';
 import { watchTables } from './lib/stackTables';
 
-function ThemeToggle() {
-  // White is the default; the navy theme is an opt-in kept per browser.
+function useDark() {
+  // White is the default; the dark theme is an opt-in kept per browser.
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -25,15 +26,58 @@ function ThemeToggle() {
     }
     window.dispatchEvent(new Event('sn-theme'));
   }, [dark]);
+  return [dark, setDark] as const;
+}
+
+/**
+ * One menu for the testnet's tools: the theme, where to get testnet tokens (each token's own faucet). The test
+ * wallet's role switch and the local dev faucet stay in the bar (dev builds only).
+ */
+function ToolsMenu() {
+  const [open, setOpen] = useState(false);
+  const [dark, setDark] = useDark();
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', off);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', off);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
   return (
-    <button
-      className="btn"
-      onClick={() => setDark((d) => !d)}
-      aria-label={dark ? 'Switch to the light theme' : 'Switch to the dark theme'}
-      title={dark ? 'Light theme' : 'Dark theme'}
-    >
-      {dark ? <Sun className="i" /> : <Moon className="i" />}
-    </button>
+    <span className="menu" ref={ref}>
+      <button
+        className="btn"
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label="Theme and testnet tokens"
+        title="Theme and testnet tokens"
+        onClick={() => setOpen((o) => !o)}
+        data-tools
+      >
+        <Settings2 className="i" />
+      </button>
+      {open && (
+        <div className="menu-pop tools-pop" role="menu">
+          <button type="button" className="mi" role="menuitem" onClick={() => setDark((d) => !d)}>
+            <span className="row gap-8">
+              {dark ? <Sun className="i" /> : <Moon className="i" />}
+              <span>{dark ? 'Light theme' : 'Dark theme'}</span>
+            </span>
+          </button>
+          <div className="sep" />
+          <TestnetTokens />
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -79,29 +123,14 @@ function Wordmark() {
 export default function App() {
   const { pathname } = useLocation();
   const { config } = useChains();
-  const narrow = useNarrow();
-  const [menu, setMenu] = useState(false);
-  useEffect(() => {
-    setMenu(false);
-  }, [pathname, narrow]);
+  const narrow = useNarrow(720);
   useEffect(() => watchTables(), []);
   const networks = config.chains.map((c) => c.name).join(' · ');
-  const workspace = pathname.startsWith('/issue');
-  const extras = (
-    <>
-      <span className="pill plain" title="Networks notes run on (testnets)" data-networks>
-        <span className="dot text-success" />
-        {networks}
-      </span>
-      <FaucetButton />
-      <RoleSwitch />
-      <ThemeToggle />
-    </>
-  );
+  const workspace = pathname.startsWith('/issue/advanced');
   return (
-    <>
+    <ToastProvider>
       <NewVersion />
-      <header className={`appbar${menu ? ' open' : ''}`}>
+      <header className="appbar">
         <div className="appbar-row">
           <Link to="/" className="brand" aria-label="notes.markets marketplace">
             <Wordmark />
@@ -125,26 +154,21 @@ export default function App() {
             </NavLink>
           </nav>
           <div className="right">
-            {!narrow && extras}
+            <span
+              className="net-dot"
+              title={`Testnets: ${networks}. Test tokens only.`}
+              aria-label={`Testnets: ${networks}`}
+              data-networks={networks}
+            >
+              <span className="dot" />
+              {narrow ? '' : config.chains.length > 1 ? `${config.chains.length} testnets` : 'Testnet'}
+            </span>
+            <FaucetButton devOnly />
+            <RoleSwitch />
+            <ToolsMenu />
             <ConnectButton chainStatus="icon" accountStatus={narrow ? 'avatar' : 'address'} showBalance={false} />
-            {narrow && (
-              <button
-                className="btn menu-btn"
-                aria-label={menu ? 'Close menu' : 'Open menu'}
-                aria-expanded={menu}
-                aria-controls="appbar-sheet"
-                onClick={() => setMenu((m) => !m)}
-              >
-                {menu ? <X className="i" /> : <Menu className="i" />}
-              </button>
-            )}
           </div>
         </div>
-        {narrow && menu && (
-          <div id="appbar-sheet" className="appbar-sheet">
-            {extras}
-          </div>
-        )}
       </header>
       <Routes>
         <Route path="/" element={<Marketplace />} />
@@ -160,11 +184,7 @@ export default function App() {
       </Routes>
       {!workspace && (
         <footer className="foot">
-          <span>
-            notes.markets · Robinhood Chain and Base testnets: test tokens only, contracts not audited. Each note is a
-            workflow run by one contract on its chain; Chainlink CRE writes the strikes and observations, and Chainlink
-            CCIP carries collateral locked on the other chain.
-          </span>
+          <span>notes.markets runs on testnets: test tokens only, and the contracts are not audited.</span>
           {config.chains
             .filter((c) => c.explorer)
             .map((c) => (
@@ -174,7 +194,7 @@ export default function App() {
             ))}
         </footer>
       )}
-    </>
+    </ToastProvider>
   );
 }
 
