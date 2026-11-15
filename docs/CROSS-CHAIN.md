@@ -10,7 +10,8 @@ traded.
 - **Base note ← Robinhood vault.** Robinhood's stock tokens (TSLA, AMZN, AMD, PLTR), USDG or WETH locked on Robinhood
   Chain collateralise a structured note on Base, as `TSLA.rh`, `AMZN.rh`… receipts.
 - **Robinhood Chain note ← Base vault.** USDC or WETH locked on Base collateralise a note on Robinhood Chain, as
-  `USDC.base` and `WETH.base` receipts.
+  `USDC.base` and `WETH.base` receipts; once deployed and added to the pair, the B20 stock stand-ins too (`TSLAc.base`,
+  `NVDAc.base`…, [BASE-STOCKS.md](BASE-STOCKS.md)).
 
 What exists:
 - Contracts and tests: `HomeGateway`, `RemoteReceipt` (home side) and `RemoteVault` (asset side) in
@@ -51,6 +52,7 @@ locally (`DEFAULT_HAIRCUT`; the issuer can set lower or higher haircuts per issu
 | Base Sepolia | Robinhood Chain testnet | TSLA, AMZN, AMD, PLTR (Robinhood) | `TSLA.rh`, `AMZN.rh`, `AMD.rh`, `PLTR.rh` (18 dp) | the stock | 60% |
 | Robinhood Chain testnet | Base Sepolia | USDC (Circle) `0x036C…CF7e` | `USDC.base` (6 dp) | USD | 100% |
 | Robinhood Chain testnet | Base Sepolia | WETH (OP Stack predeploy) `0x4200…0006` | `WETH.base` (18 dp) | ETH | 70% |
+| Robinhood Chain testnet | Base Sepolia | TSLAc, AMZNc, NVDAc, AAPLc, MSFTc, METAc (notes.markets' B20 stand-ins; not deployed yet) | `TSLAc.base`… (8 dp) | the token (Coinbase's per-token feed: share × multiplier), key `TSLAc`… | 60% |
 
 - **One collateral chain per note.** A note's terms either pledge everything into the note on its own chain
   (`collateralChain` absent) or lock everything on the other chain (`collateralChain` = that chain's key,
@@ -58,8 +60,17 @@ locally (`DEFAULT_HAIRCUT`; the issuer can set lower or higher haircuts per issu
 - **Cash stays home.** Subscriptions, coupons and the redemption are always in the home chain's cash token (USDC on
   Base, USDG on Robinhood Chain); only the collateral is elsewhere.
 - **NFLX** (Robinhood, no Chainlink feed the keeper reads) is never lockable.
+- **A receipt keeps its token's valuation key.** `TSLA.rh` is priced as the TSLA share (Robinhood's tokens are 1:1
+  shares); `TSLAc.base` as the TSLAc token (Chainlink's `Coinbase TSLA` feed on Base mainnet: share × multiplier).
+  Reusing `TSLA` for a B20 token would price it as a share.
+- **Base stocks arrive later.** The stand-in receipts are in `REMOTE_COLLATERAL` already, but `wirePlan` leaves out a
+  token that is not deployed and `checkCrossChainDeployment` accepts the live record without them; they are wired
+  into the existing pair by `EXTEND_PAIR=1 bash scripts/deploy-base-stocks.sh` (vault `setToken` on Base, gateway
+  `registerReceipt` on Robinhood Chain) and served from then on.
 - **Underlyings** are independent of all this: any price in the Chainlink catalogue, read by CRE from mainnet feeds,
-  on either home chain. On Base a stock underlying settles in cash (there is no stock token on Base to deliver).
+  on either home chain. On Base a stock underlying is delivered physically in the B20 stand-in where there is one (TSLA,
+  AMZN, NVDA, AAPL, MSFT, META: shares ÷ multiplier TSLAc… units, once deployed, [BASE-STOCKS.md](BASE-STOCKS.md)); any
+  other stock settles in cash there.
 
 ## How it works
 
@@ -79,7 +90,7 @@ locally (`DEFAULT_HAIRCUT`; the issuer can set lower or higher haircuts per issu
                     (vault balance vs locked vs receipts outstanding)
 
   Pair 1: home Base Sepolia,            vault on Robinhood Chain testnet (USDG, WETH, TSLA, AMZN, AMD, PLTR)
-  Pair 2: home Robinhood Chain testnet, vault on Base Sepolia            (USDC, WETH)
+  Pair 2: home Robinhood Chain testnet, vault on Base Sepolia            (USDC, WETH; the B20 stand-ins once added)
 ```
 
 The example shows pair 1 (TSLA locked on Robinhood Chain backing a Base note); pair 2 is the same with the chains
