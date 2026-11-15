@@ -8,7 +8,11 @@
 #   ethereum-mainnet-arbitrum-1    the catalogue's few feeds Ethereum has not (e.g. HKD/USD, SEK/USD, DOGE/USD)
 #   equities (TSLA, AMZN, AMD, PLTR, NVDA…) come from Robinhood Chain mainnet's feeds over the HTTP capability
 #   (config httpFeedChains), not an EVM read: no RPC entry needed here.
-# The catalogue (packages/core/src/products/feeds-catalogue.ts, docs/UNDERLYINGS.md) uses only these three chains.
+#   ethereum-mainnet-base-1        Chainlink's per-token feeds of Coinbase's B20 stocks ("Coinbase TSLA"…: share price x
+#                                  multiplier): the price of TSLAc… COLLATERAL only (docs/BASE-STOCKS.md)
+#   ethereum-testnet-sepolia-base-1 (already a note chain) also serves the B20 stand-ins' multiplier feeds, read at a
+#                                  physically settled Base note's final observation
+# The catalogue (packages/core/src/products/feeds-catalogue.ts, docs/UNDERLYINGS.md) uses only the first three.
 # RPC URLs may use ${VAR} from the shell or the env file given with -e.
 #
 # There is no production target: CRE cannot write to Robinhood Chain mainnet yet (services/keeper-fallback).
@@ -26,6 +30,8 @@ local-fork:
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-arbitrum-1
       url: https://arbitrum-one-rpc.publicnode.com
+    - chain-name: ethereum-mainnet-base-1
+      url: https://base-rpc.publicnode.com
 
 # Testnet: `cre workflow simulate --broadcast` writes through each chain's MockKeystoneForwarder (Robinhood Chain
 # testnet 0x0b93…3885, Base Sepolia 0x8230…F3e5).
@@ -39,3 +45,5 @@ staging-settings:
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-arbitrum-1
       url: https://arbitrum-one-rpc.publicnode.com
+    - chain-name: ethereum-mainnet-base-1
+      url: https://base-rpc.publicnode.com

@@ -28,6 +28,11 @@ import {CreReceiver} from "../src/cre/CreReceiver.sol";
 ///     ROLE=wire CHAIN=base-sepolia GATEWAY=0x.. REMOTE=robinhood-testnet VAULT=0x.. TOKENS=0x..,0x.. \
 ///       DECIMALS=6,18,.. SYMBOLS=USDG.rh,WETH.rh,.. forge script ... --rpc-url $RPC --broadcast
 ///  4. (any time, anyone) Top up the release fee pool: ROLE=fund CHAIN=base-sepolia GATEWAY=0x.. FEE_POOL=wei
+///  5. Extend a live pair with tokens deployed later (the B20 stock stand-ins on Base Sepolia, docs/BASE-STOCKS.md;
+///     scripts/deploy-base-stocks.sh EXTEND_PAIR=1): allow them in the vault, then create their receipts:
+///     ROLE=allow CHAIN=base-sepolia VAULT=0x.. TOKENS=0x..,0x.. forge script ... --rpc-url $ASSET_RPC --broadcast
+///     ROLE=receipts CHAIN=robinhood-testnet GATEWAY=0x.. REMOTE=base-sepolia TOKENS=0x..,0x.. DECIMALS=8,8 \
+///       SYMBOLS=TSLAc.base,NVDAc.base forge script ... --rpc-url $RPC --broadcast
 ///
 /// The OWNER must be the broadcasting key for runs 2 and 3 (they configure), or a multisig that executes the same
 /// calls. Routers and selectors: Chainlink's CCIP directory (docs.chain.link/api/ccip/v1/chains and /lanes, testnet),
@@ -101,10 +106,16 @@ contract DeployCrossChain is Script {
             vm.serializeUint("out", "selector", here.selector);
             vm.serializeAddress("out", "gateway", vm.envAddress("GATEWAY"));
             pendingOut = vm.serializeAddress("out", "vault", address(v));
-        } else if (r == keccak256("wire")) {
+        } else if (r == keccak256("allow")) {
+            RemoteVault v = RemoteVault(payable(vm.envAddress("VAULT")));
+            address[] memory tokens = vm.envAddress("TOKENS", ",");
+            for (uint256 i = 0; i < tokens.length; i++) v.setToken(tokens[i], true);
+            console2.log("RemoteVault", address(v), "allows", tokens.length);
+        } else if (r == keccak256("wire") || r == keccak256("receipts")) {
             Net memory remote = _net(vm.envString("REMOTE"));
             HomeGateway g = HomeGateway(payable(vm.envAddress("GATEWAY")));
-            g.setRemote(remote.selector, vm.envAddress("VAULT"), 300_000);
+            // `receipts` adds receipts to a gateway already wired to its vault; `wire` (re)sets the vault first.
+            if (r == keccak256("wire")) g.setRemote(remote.selector, vm.envAddress("VAULT"), 300_000);
             address[] memory tokens = vm.envAddress("TOKENS", ",");
             uint256[] memory decimals = vm.envUint("DECIMALS", ",");
             string[] memory symbols = vm.envString("SYMBOLS", ",");
@@ -117,11 +128,12 @@ contract DeployCrossChain is Script {
                 receipts = vm.serializeAddress("receipts", symbols[i], receipt);
                 console2.log(symbols[i], receipt);
             }
-            vm.serializeUint("out", "gasLimit", 300_000);
-            vm.serializeAddress("out", "vault", vm.envAddress("VAULT"));
+            (address vault, uint32 gasLimit) = g.remotes(remote.selector);
+            vm.serializeUint("out", "gasLimit", gasLimit);
+            vm.serializeAddress("out", "vault", vault);
             pendingOut = vm.serializeString("out", "receipts", receipts);
         } else {
-            revert("ROLE: gateway | vault | repoint | wire | fund");
+            revert("ROLE: gateway | vault | repoint | wire | fund | allow | receipts");
         }
         vm.stopBroadcast();
         string memory path = vm.envOr("OUT", string(""));

@@ -37,10 +37,19 @@ export const HTTP_FEED_CHAINS: Record<string, { rpc: string; chainId: number } &
  * Feed chains Chainlink CRE reads with its EVM read capability (the keeper's EVMClient), by chain-selector name, with
  * a public RPC for the fallback keeper and the catalogue generator. Every feed in the catalogue (FEED_CATALOGUE) lives
  * on one of these or on an HTTP_FEED_CHAINS chain. A CRE target needs an `rpcs` entry for each (cre/project.yaml).
+ *
+ * Base (docs/BASE-STOCKS.md) is two feed chains, and they price different things:
+ *  - Base mainnet (ethereum-mainnet-base-1, the CRE SDK's name for chain 8453): Chainlink's per-token feeds of
+ *    Coinbase's B20 stocks ("Coinbase TSLA" …: share price x multiplier). They value TSLAc… COLLATERAL only;
+ *    underlyings (strikes, observations) keep the share-price feeds of the catalogue.
+ *  - Base Sepolia (ethereum-testnet-sepolia-base-1, also a note chain): the B20MultiplierFeed next to each stand-in,
+ *    read at a physically settled note's final observation to deliver shares / multiplier.
  */
 export const EVM_FEED_CHAINS: Record<string, { rpc: string; chainId: number }> = {
   'ethereum-mainnet': { rpc: 'https://ethereum-rpc.publicnode.com', chainId: 1 },
   'ethereum-mainnet-arbitrum-1': { rpc: 'https://arbitrum-one-rpc.publicnode.com', chainId: 42161 },
+  'ethereum-mainnet-base-1': { rpc: 'https://base-rpc.publicnode.com', chainId: 8453 },
+  'ethereum-testnet-sepolia-base-1': { rpc: 'https://base-sepolia-rpc.publicnode.com', chainId: 84532 },
 };
 
 /** The JSON-RPC body asking for the head block number. */

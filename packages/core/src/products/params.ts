@@ -25,6 +25,20 @@
  * final payment the collateral is released to the issuer.
  */
 
+import {
+  B20_STOCKS,
+  B20_SYMBOLS,
+  b20MultiplierFeed,
+  b20PriceFeed,
+  BASE_MAINNET_FEED_CHAIN,
+  BASE_SEPOLIA_FEED_CHAIN,
+  BASE_SEPOLIA_STOCKS,
+  isB20Symbol,
+  isDeployedAddress,
+  multiplierField,
+  type B20Symbol,
+  type FeedSpec,
+} from './base-stocks';
 import { ASSET_CLASSES } from './feed-directory';
 import { FEED_CATALOGUE, type CatalogueFeed, type CatalogueSymbol } from './feeds-catalogue';
 
@@ -51,8 +65,13 @@ export interface Underlying {
  * A collateral asset the issuer may pledge: the stablecoin (USD) or a real token valued by its Chainlink feed (ETH as
  * WETH, TSLA, AMZN, AMD and PLTR as Robinhood's stock tokens), on the note's own chain (CHAIN_TOKENS) or locked on the
  * other note chain (REMOTE_COLLATERAL). BTC is synthetic for now: an underlying, cash-settled, never pledged.
+ *
+ * The symbol is the VALUATION KEY: which feed prices one token. Robinhood's stock tokens are priced as the share (TSLA,
+ * share-price feed). Coinbase's B20 stocks on Base (TSLAc, NVDAc…: notes.markets' stand-ins on Base Sepolia,
+ * docs/BASE-STOCKS.md) have keys of their own, valued with Chainlink's per-token feeds (share price x multiplier):
+ * never TSLA, which would price them as shares.
  */
-export type CollateralSymbol = 'USD' | 'ETH' | 'TSLA' | 'AMZN' | 'AMD' | 'PLTR';
+export type CollateralSymbol = 'USD' | 'ETH' | 'TSLA' | 'AMZN' | 'AMD' | 'PLTR' | B20Symbol;
 export interface CollateralTerm {
   symbol: CollateralSymbol;
   /** Value counted toward coverage, % of market value (USD 100; volatile tokens lower). Per issuance, 0–100. */
@@ -141,7 +160,7 @@ export type CollateralChain = 'note' | (string & {});
  * The chains notes run on (each a "home": issuance, subscriptions, coupons, redemption, the note tokens, the escrow
  * and Chainlink CRE's reports all happen there):
  *  - Robinhood Chain testnet (chain id 46630), cash USDG (Paxos), collateral USDG, WETH and Robinhood's stock tokens;
- *  - Base Sepolia (chain id 84532), cash USDC (Circle), collateral USDC and WETH.
+ *  - Base Sepolia (chain id 84532), cash USDC (Circle), collateral USDC, WETH and the B20 stock stand-ins (TSLAc…).
  * A term sheet with no `chain` is a Robinhood Chain note (HOME_CHAIN, the first note chain): its definition stays as
  * it was before Base was added. A term sheet naming any other chain is refused.
  */
@@ -197,7 +216,16 @@ export interface ChainToken {
   issuer: string;
   /** What it is priced as (its Chainlink feed), or null when no feed CRE can read exists: held, not used. */
   valuedAs: CollateralSymbol | null;
+  /**
+   * A B20 stock (Coinbase's standard; on Base Sepolia notes.markets' stand-in): the share underlying it delivers
+   * (`delivers`, e.g. TSLA) at shares / multiplier token units, the B20MultiplierFeed the note reads the multiplier
+   * from, and the real Coinbase token on Base mainnet. Absent for every other token.
+   */
+  b20?: { delivers: string; multiplierFeed: `0x${string}`; standIn: boolean; mainnetToken: `0x${string}` };
 }
+
+/** Whether a token's contract exists (not the NOT_DEPLOYED placeholder of a stand-in still to deploy). */
+export const isDeployedToken = (t: Pick<ChainToken, 'address'> | null | undefined) => isDeployedAddress(t?.address);
 
 /**
  * The real tokens on each note chain; notes.markets mints none of them.
@@ -218,8 +246,16 @@ export interface ChainToken {
  *  - USDC: Circle's testnet USDC (developers.circle.com/stablecoins/usdc-contract-addresses), 6 decimals; Circle's
  *    faucet (faucet.circle.com) gives it. Circle can pause it and blacklist an address (FiatToken), like USDG.
  *  - WETH: the OP Stack WETH9 predeploy 0x4200…0006 (deposit() wraps ETH), 18 decimals.
+ *  - TSLAc, AMZNc, NVDAc, AAPLc, MSFTc, METAc: notes.markets' TEST STAND-INS for Coinbase's B20 stock tokens, which
+ *    exist on Base mainnet only (docs/BASE-STOCKS.md, base-stocks.ts). 8 decimals and the real token's multiplier,
+ *    like the real ones; valued with Chainlink's per-token feeds on Base mainnet (keys TSLAc…, not TSLA); a TSLA, AMZN,
+ *    NVDA, AAPL, MSFT or META underlying is delivered in them (shares / multiplier). Their addresses are
+ *    BASE_SEPOLIA_STOCKS: the NOT_DEPLOYED placeholder until scripts/deploy-base-stocks.sh runs, and a token not
+ *    deployed is never served, offered or wired (isDeployedToken). These are notes.markets' own test tokens, minted by
+ *    a public rate-limited faucet; they are not Coinbase's and have no value.
  *  Robinhood's stock tokens do not exist on Base: a Base note gets them as collateral by locking them on Robinhood
- *  Chain (REMOTE_COLLATERAL), and a stock underlying settles in cash there.
+ *  Chain (REMOTE_COLLATERAL, TSLA.rh…). The other way round, a Robinhood Chain note can lock the Base stand-ins on Base
+ *  (TSLAc.base…).
  */
 export const CHAIN_TOKENS: Record<NoteChain, Record<string, ChainToken>> = {
   'robinhood-testnet': {
@@ -297,8 +333,31 @@ export const CHAIN_TOKENS: Record<NoteChain, Record<string, ChainToken>> = {
       issuer: 'OP Stack predeploy (WETH9)',
       valuedAs: 'ETH',
     },
+    ...b20StandIns(),
   },
 };
+
+/** The Base Sepolia stand-ins for Coinbase's B20 stocks (addresses: BASE_SEPOLIA_STOCKS). */
+function b20StandIns(): Record<string, ChainToken> {
+  return Object.fromEntries(
+    B20_SYMBOLS.map((s) => {
+      const b = B20_STOCKS[s];
+      const d = BASE_SEPOLIA_STOCKS.tokens[s];
+      return [
+        s,
+        {
+          token: s,
+          decimals: b.decimals,
+          address: d.token,
+          name: `${b.name} (test stand-in for Coinbase ${s})`,
+          issuer: 'notes.markets (test stand-in)',
+          valuedAs: s,
+          b20: { delivers: b.ticker, multiplierFeed: d.multiplierFeed, standIn: true, mainnetToken: b.mainnetToken },
+        } satisfies ChainToken,
+      ];
+    }),
+  );
+}
 
 /** Robinhood's stock tokens with no Chainlink feed CRE can read: shown as held, never offered as collateral or delivery. */
 export const UNPRICED_STOCKS = Object.values(CHAIN_TOKENS['robinhood-testnet'])
@@ -308,6 +367,15 @@ export const UNPRICED_STOCKS = Object.values(CHAIN_TOKENS['robinhood-testnet'])
 /** The real local token valued as `sym` on `chain` (USD: the stablecoin), if any. */
 export function chainTokenFor(chain: NoteChain, sym: string): ChainToken | undefined {
   return Object.values(CHAIN_TOKENS[chain] ?? {}).find((t) => t.valuedAs === sym);
+}
+
+/**
+ * The local token a physically settled note delivers for underlying `sym` on `chain`: the token valued as it (WETH
+ * for ETH, Robinhood's TSLA on Robinhood Chain), else a B20 stock that represents the share (TSLAc on Base Sepolia,
+ * paid at shares / multiplier).
+ */
+export function deliveryTokenFor(chain: NoteChain, sym: string): ChainToken | undefined {
+  return chainTokenFor(chain, sym) ?? Object.values(CHAIN_TOKENS[chain] ?? {}).find((t) => t.b20?.delivers === sym);
 }
 
 /**
@@ -327,7 +395,10 @@ export interface RemoteToken {
 
 /**
  * The tokens a vault on `asset` accepts as collateral for notes on `home`: every token there that has a Chainlink
- * price the keeper reads (valuedAs), in COLLATERAL_SYMBOLS. NFLX (no feed) is left out.
+ * price the keeper reads (valuedAs), in COLLATERAL_SYMBOLS. NFLX (no feed) is left out. The receipt keeps the token's
+ * valuation key: TSLA.rh is priced as the TSLA share (Robinhood's tokens are), TSLAc.base as the TSLAc token (Coinbase's
+ * per-token feed). A stand-in not deployed yet is listed here (its symbol and key are fixed) but never wired
+ * (wirePlan skips it) and never issuable (validateProductParams).
  */
 function lockable(home: NoteChain, asset: NoteChain): Partial<Record<CollateralSymbol, RemoteToken>> {
   const out: Partial<Record<CollateralSymbol, RemoteToken>> = {};
@@ -344,7 +415,8 @@ function lockable(home: NoteChain, asset: NoteChain): Partial<Record<CollateralS
  * it (the term sheet's collateralChain). The token stays in a RemoteVault there; the note holds receipts that
  * Chainlink CCIP mints on the home chain, valued with the token's own Chainlink feed and the haircut the issuer sets
  * (DEFAULT_HAIRCUT, the same as the token pledged locally). Both directions:
- *  - a Robinhood Chain note, collateral on Base: USDC.base, WETH.base;
+ *  - a Robinhood Chain note, collateral on Base: USDC.base, WETH.base and the B20 stock stand-ins TSLAc.base,
+ *    AMZNc.base, NVDAc.base, AAPLc.base, MSFTc.base, METAc.base (valued per token, docs/BASE-STOCKS.md);
  *  - a Base note, collateral on Robinhood Chain: USDG.rh, WETH.rh and Robinhood's stock tokens TSLA.rh, AMZN.rh,
  *    AMD.rh, PLTR.rh.
  * A pair is usable once its gateway and vault are deployed and the served config lists the receipts (the app checks
@@ -405,6 +477,13 @@ export const DEFAULT_HAIRCUT: Record<CollateralSymbol, number> = {
   AMZN: 60,
   AMD: 60,
   PLTR: 60,
+  // Coinbase's B20 stocks (stand-ins on Base Sepolia): the same haircut as Robinhood's stock tokens.
+  TSLAc: 60,
+  AMZNc: 60,
+  NVDAc: 60,
+  AAPLc: 60,
+  MSFTc: 60,
+  METAc: 60,
 };
 export const COLLATERAL_SYMBOLS = Object.keys(DEFAULT_HAIRCUT) as CollateralSymbol[];
 export const DEFAULT_COLLATERAL: CollateralTerm[] = [{ symbol: 'USD', haircutPct: 100 }];
@@ -422,16 +501,25 @@ export function economicsOf(p: ProductParams) {
 
 /**
  * The token an underlying is delivered in on the note's chain: the real token there priced as it (WETH for ETH on
- * both chains; Robinhood's TSLA, AMZN, AMD and PLTR on Robinhood Chain only). Undefined when there is none (BTC, SOL,
- * NVDA, AAPL…, or a stock on Base): such a note settles in cash.
+ * both chains; Robinhood's TSLA, AMZN, AMD and PLTR on Robinhood Chain), or on Base Sepolia the B20 stock stand-in for
+ * the share (TSLAc for TSLA, also AMZN, NVDA, AAPL, MSFT, META: `multiplier` set, delivered at shares / multiplier,
+ * the multiplier read into `multiplier.field` at the final observation from `multiplier.feed`). Undefined when there
+ * is none (BTC, SOL, AMD on Base…): such a note settles in cash.
  */
 export function deliverableToken(
   p: Pick<ProductParams, 'chain'>,
   symbol: string,
-): { token: string; decimals: number } | undefined {
+): { token: string; decimals: number; multiplier?: { field: string; feed: FeedSpec } } | undefined {
   if (symbol === 'USD') return undefined;
-  const local = chainTokenFor(noteChainOf(p), symbol);
-  return local ? { token: local.token, decimals: local.decimals } : undefined;
+  const chain = noteChainOf(p);
+  const local = deliveryTokenFor(chain, symbol);
+  if (!local) return undefined;
+  const b20 = local.b20 && isB20Symbol(local.token) ? local.token : null;
+  return {
+    token: local.token,
+    decimals: local.decimals,
+    ...(b20 ? { multiplier: { field: multiplierField(symbol), feed: b20MultiplierFeed(b20) } } : {}),
+  };
 }
 
 /** The token behind a collateral asset (USD: the stablecoin) for this note: on its chain, or a remote receipt. */
@@ -449,9 +537,61 @@ export function collateralTokenOf(
   return local ? { token: local.token, decimals: local.decimals } : undefined;
 }
 
-/** What each collateral symbol is pledged as (the note chain's own tokens, or another chain's receipts), for pickers. */
+/**
+ * The Chainlink feed a priced collateral key is valued with: the catalogue's (ETH, and TSLA… as shares: Robinhood's
+ * stock tokens are 1:1 shares) or, for a B20 stock (TSLAc…), Chainlink's per-token feed on Base mainnet (share price x
+ * multiplier). Undefined for USD (no feed).
+ */
+export function collateralFeed(c: CollateralSymbol): FeedSpec | undefined {
+  if (c === 'USD') return undefined;
+  if (isB20Symbol(c)) return b20PriceFeed(c);
+  return FEEDS[c];
+}
+
+/**
+ * Where a deliverable or collateral token of these terms is not deployed yet (a B20 stand-in before its deploy): the
+ * token symbols, for issuance checks. Empty when everything exists.
+ */
+export function undeployedTokensOf(p: ProductParams): string[] {
+  const chain = noteChainOf(p);
+  const out = new Set<string>();
+  if (p.settlement === 'physical')
+    for (const u of p.underlyings ?? []) {
+      const t = deliveryTokenFor(chain, u.symbol);
+      if (t && (!isDeployedToken(t) || (t.b20 && !isDeployedAddress(t.b20.multiplierFeed)))) out.add(t.token);
+    }
+  for (const c of economicsOf(p).collateral) {
+    if (c.symbol === 'USD') continue;
+    const t = isRemoteCollateral(p) ? remoteCollateralOf(p)?.[c.symbol]?.locked : chainTokenFor(chain, c.symbol);
+    if (t && !isDeployedToken(t)) out.add(t.token);
+  }
+  return [...out];
+}
+
+/**
+ * What each collateral symbol is pledged as (the note chain's own tokens, or another chain's receipts), for pickers:
+ * null where there is none, or its token is not deployed yet (a B20 stand-in before its deploy).
+ */
 export const collateralChoices = (p: Pick<ProductParams, 'chain' | 'collateralChain'>) =>
-  COLLATERAL_SYMBOLS.map((symbol) => ({ symbol, token: collateralTokenOf(p, symbol)?.token ?? null }));
+  COLLATERAL_SYMBOLS.map((symbol) => ({
+    symbol,
+    token: canPledgeNow(p, symbol) ? (collateralTokenOf(p, symbol)?.token ?? null) : null,
+  }));
+
+/** Whether `c` can be pledged on these terms now: it has a token there, and that token is deployed. */
+export function canPledgeNow(p: Pick<ProductParams, 'chain' | 'collateralChain'>, c: CollateralSymbol): boolean {
+  if (!collateralTokenOf(p, c)) return false;
+  if (c === 'USD') return true;
+  const t = isRemoteCollateral(p) ? remoteCollateralOf(p)?.[c]?.locked : chainTokenFor(noteChainOf(p), c);
+  return !t || isDeployedToken(t);
+}
+
+/** Whether underlying `sym` can be delivered on these terms' chain now: a token exists there and is deployed. */
+export function canDeliverNow(p: Pick<ProductParams, 'chain'>, sym: string): boolean {
+  if (!deliverableToken(p, sym)) return false;
+  const t = deliveryTokenFor(noteChainOf(p), sym);
+  return !t || (isDeployedToken(t) && (!t.b20 || isDeployedAddress(t.b20.multiplierFeed)));
+}
 
 /**
  * The collateral symbol behind a definition's collateral asset name ("Collateral WETH" -> ETH, "Collateral TSLA.rh"
@@ -520,7 +660,13 @@ const EVM_ADDR = /^0x[0-9a-fA-F]{40}$/;
  * it delivers or pledges real there (or a receipt of a token locked on the other chain).
  */
 export function validateProductParams(p: ProductParams): string[] {
-  return validateTermSheet(p);
+  const e = validateTermSheet(p);
+  const pending = undeployedTokensOf(p);
+  if (pending.length)
+    e.push(
+      `${pending.join(', ')} ${pending.length > 1 ? 'are' : 'is'} not deployed yet (notes.markets' test stand-in${pending.length > 1 ? 's' : ''} for Coinbase's B20 stocks, docs/BASE-STOCKS.md): pick another token for now.`,
+    );
+  return e;
 }
 
 /**
@@ -535,11 +681,11 @@ export function toChain(p: ProductParams, chain: NoteChain): ProductParams {
     void _held;
     q = rest;
   }
-  if (q.settlement === 'physical' && (q.underlyings ?? []).some((u) => !deliverableToken(q, u.symbol)))
+  if (q.settlement === 'physical' && (q.underlyings ?? []).some((u) => !canDeliverNow(q, u.symbol)))
     q = { ...q, settlement: 'cash' };
   const col = economicsOf(p).collateral;
-  if (col.some((c) => !collateralTokenOf(q, c.symbol))) {
-    const kept = col.filter((c) => !!collateralTokenOf(q, c.symbol));
+  if (col.some((c) => !canPledgeNow(q, c.symbol))) {
+    const kept = col.filter((c) => canPledgeNow(q, c.symbol));
     q = { ...q, collateral: kept.length ? kept : DEFAULT_COLLATERAL };
   }
   return q;
@@ -555,7 +701,7 @@ export function toChain(p: ProductParams, chain: NoteChain): ProductParams {
 export function toIssuanceTerms(p: ProductParams): ProductParams {
   const chain = isLegacyChainTerms(p) ? HOME_CHAIN : noteChainOf(p);
   const undeliverable =
-    p.settlement === 'physical' && (p.underlyings ?? []).some((u) => !deliverableToken({ chain }, u.symbol));
+    p.settlement === 'physical' && (p.underlyings ?? []).some((u) => !canDeliverNow({ chain }, u.symbol));
   const remote = isRemoteCollateral(p) && (p.collateralChain === chain || !remoteCollateralOf({ ...p, chain }));
   if (!isLegacyChainTerms(p) && !undeliverable && !remote) return p;
   return toChain(p, chain);
@@ -712,9 +858,19 @@ export const CASH_TOKENS: Record<string, `0x${string}`> = Object.fromEntries(
 /** Paxos's USDG faucet (Robinhood Chain testnet). */
 export const CASH_FAUCET = 'https://faucet.paxos.com';
 
-/** Every real token's address by symbol per chain (the app merges these with the deployment's config). */
+/**
+ * Every real token's address by symbol per chain (the app merges these with the deployment's config). Tokens not
+ * deployed yet (a B20 stand-in before its deploy) are left out.
+ */
 export const EXTERNAL_TOKENS: Record<string, Record<string, `0x${string}`>> = Object.fromEntries(
-  NOTE_CHAINS.map((c) => [c, Object.fromEntries(Object.values(CHAIN_TOKENS[c]).map((t) => [t.token, t.address]))]),
+  NOTE_CHAINS.map((c) => [
+    c,
+    Object.fromEntries(
+      Object.values(CHAIN_TOKENS[c])
+        .filter(isDeployedToken)
+        .map((t) => [t.token, t.address]),
+    ),
+  ]),
 );
 
 /** Where to get testnet tokens (plain links: notes.markets mints nothing). */
@@ -738,8 +894,23 @@ export const GAS_FAUCETS: Record<NoteChain, readonly string[]> = {
   'robinhood-testnet': [FAUCETS.robinhood],
   'base-sepolia': FAUCETS.baseSepolia,
 };
-/** Where to get each chain's own stock tokens (Robinhood Chain only). */
-export const STOCK_TOKEN_FAUCETS: Record<string, string> = { 'robinhood-testnet': FAUCETS.robinhood };
+/**
+ * The B20 stand-ins' faucet on Base Sepolia (B20StockFaucet: claim(token) or claimAll(), rate-limited; b20FaucetAbi),
+ * once deployed; null before.
+ */
+export const BASE_STOCK_FAUCET: `0x${string}` | null = isDeployedAddress(BASE_SEPOLIA_STOCKS.faucet)
+  ? BASE_SEPOLIA_STOCKS.faucet
+  : null;
+/**
+ * Where to get each chain's own stock tokens: Robinhood's faucet on Robinhood Chain; on Base Sepolia, once deployed,
+ * notes.markets' B20 stand-in faucet (its contract page: call claimAll, or claim(token)).
+ */
+export const STOCK_TOKEN_FAUCETS: Record<string, string> = {
+  'robinhood-testnet': FAUCETS.robinhood,
+  ...(BASE_STOCK_FAUCET
+    ? { 'base-sepolia': `https://sepolia.basescan.org/address/${BASE_STOCK_FAUCET}#writeContract` }
+    : {}),
+};
 
 /** The tokens a note can deliver on its chain, for messages ("WETH for ETH, …"). */
 function deliverableList(p: Pick<ProductParams, 'chain'>): string {
@@ -813,11 +984,16 @@ export function catalogueSummary(max = Infinity): string {
   }).join('; ');
 }
 
-/** Where a feed chain's prices come from, for labels ("Chainlink · Robinhood Chain"). */
+/**
+ * Where a feed chain's prices come from, for labels ("Chainlink · Robinhood Chain"). Base mainnet carries Chainlink's
+ * per-token feeds of Coinbase's B20 stocks (collateral prices); Base Sepolia the stand-ins' multipliers (delivery).
+ */
 export const FEED_CHAIN_LABELS: Record<string, string> = {
   'ethereum-mainnet': 'Ethereum',
   'ethereum-mainnet-arbitrum-1': 'Arbitrum One',
   'robinhood-mainnet': 'Robinhood Chain',
+  [BASE_MAINNET_FEED_CHAIN]: 'Base',
+  [BASE_SEPOLIA_FEED_CHAIN]: 'Base Sepolia',
 };
 
 const base = { issuePricePct: 100, underlyings: [FEEDS.ETH], observations: 4 };

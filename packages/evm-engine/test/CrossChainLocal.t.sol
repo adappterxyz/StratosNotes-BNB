@@ -75,7 +75,7 @@ contract CrossChainLocalTest is ProductsBase {
         vm.prank(issuer);
         pid = engine.startProcess(id, 1, _roles(issuer, makeAddr("pa")), _tokens(f), f.startStep, _none(), "Note", "NOTE");
         vm.startPrank(issuer);
-        for (uint256 t = 1; t < 5; t++) tokens[t].approve(address(engine), type(uint256).max);
+        for (uint256 t = 1; t < tokens.length; t++) tokens[t].approve(address(engine), type(uint256).max);
         rEth.approve(address(engine), type(uint256).max);
         vm.stopPrank();
         for (uint256 k = 0; k < f.pledges.length; k++) {

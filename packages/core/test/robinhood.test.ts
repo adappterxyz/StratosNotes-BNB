@@ -12,6 +12,7 @@ import {
   EXTERNAL_TOKENS,
   FEEDS,
   instantiateProduct,
+  isDeployedToken,
   isRetiredTestToken,
   normalizeParams,
   NOTE_CHAINS,
@@ -60,7 +61,8 @@ describe('real tokens on Robinhood Chain', () => {
     for (const c of NOTE_CHAINS)
       for (const t of Object.values(CHAIN_TOKENS[c])) {
         expect(t.address).toMatch(ADDR);
-        expect(EXTERNAL_TOKENS[c][t.token]).toBe(t.address);
+        // A B20 stand-in not deployed yet (the zero placeholder) is not listed.
+        expect(EXTERNAL_TOKENS[c][t.token]).toBe(isDeployedToken(t) ? t.address : undefined);
         expect(isRetiredTestToken(t.token)).toBe(false);
       }
     expect(CHAIN_TOKENS['robinhood-testnet'].WETH.address).toBe('0x7943e237c7F95DA44E0301572D358911207852Fa');
@@ -89,9 +91,11 @@ describe('real tokens on Robinhood Chain', () => {
       { symbol: 'AMZN', token: 'AMZN' },
       { symbol: 'AMD', token: 'AMD' },
       { symbol: 'PLTR', token: 'PLTR' },
+      // Coinbase's B20 stocks exist on Base only (locked there, TSLAc.base, for a Robinhood Chain note).
+      ...['TSLAc', 'AMZNc', 'NVDAc', 'AAPLc', 'MSFTc', 'METAc'].map((symbol) => ({ symbol, token: null })),
     ]);
     expect(collateralChoices({ collateralChain: 'note' })).toEqual(collateralChoices({}));
-    for (const c of collateralChoices({})) expect(isRetiredTestToken(c.token!)).toBe(false);
+    for (const c of collateralChoices({})) if (c.token) expect(isRetiredTestToken(c.token)).toBe(false);
   });
 
   it('compiles the delivered token into the definition', () => {

@@ -46,10 +46,10 @@ import { productNotifications } from '../notify';
 import type { AssetDefinition, AssetOperation, TemplateField } from '../types';
 import {
   cashTokenOf,
+  collateralFeed,
   collateralTokenOf,
   deliverableToken,
   economicsOf,
-  FEEDS,
   MAX_GRACE_DAYS,
   PRODUCT_LABELS,
   productUses,
@@ -133,7 +133,10 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
   ];
   const escrowAssets = assets.filter((a) => a.kind === 'cash').map((a) => a.id);
 
-  const oracleField = (name: string, u: Underlying) =>
+  const oracleField = (
+    name: string,
+    u: Pick<Underlying, 'feed' | 'feedChain' | 'minPrice' | 'maxPrice' | 'staleness'>,
+  ) =>
     field(name, 'Decimal', {
       oracle: {
         feed: u.feed,
@@ -143,10 +146,26 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
         staleness: u.staleness ?? 3600,
       },
     });
-  // Collateral prices ride on the same CRE reports as the observations (USD needs none).
+  // Collateral prices ride on the same CRE reports as the observations (USD needs none). Each key has its own feed:
+  // TSLA (Robinhood's token) the share's, TSLAc (a B20 stock) Chainlink's per-token feed on Base (collateralFeed).
   const priced = col.filter((c) => c.symbol !== 'USD');
-  const priceFields = () =>
-    priced.map((c) => oracleField(priceField(c.symbol), FEEDS[c.symbol as Exclude<CollateralSymbol, 'USD'>]));
+  const priceFields = () => priced.map((c) => oracleField(priceField(c.symbol), collateralFeed(c.symbol)!));
+  // Physical delivery in a B20 stock (TSLAc for TSLA on Base): the shares owed are paid at shares / multiplier token
+  // units, the multiplier read at the final observation (B20MultiplierFeed). Other tokens are 1:1 with the underlying.
+  const multipliers = physical
+    ? unds.flatMap((u) => {
+        const m = deliverableToken(p, u.symbol)?.multiplier;
+        return m ? [{ sym: u.symbol, ...m }] : [];
+      })
+    : [];
+  const multOf = (sym: string) => multipliers.find((m) => m.sym === sym)?.field;
+  /**
+   * Tokens delivered per unit of face for underlying `sym`: the shares owed (1 / strike) divided by the token's
+   * multiplier for a B20 stock. The engine truncates each division (10 decimals), so this is never above the exact
+   * value: the funding check and the delivery use the same expression, so what is funded is exactly what is
+   * delivered, and a holder is short by under 2e-10 token per unit of face at most (docs/BASE-STOCKS.md).
+   */
+  const perUnitDelivery = (sym: string, strike: string) => `1 / ${strike}${multOf(sym) ? ` / ${multOf(sym)}` : ''}`;
   /** Coverage now: escrowed collateral x price x haircut, in stablecoin. */
   const coverageExpr =
     col
@@ -171,6 +190,7 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
         ]
       : [oracleField(`obs${k}`, unds[0])]),
     ...priceFields(),
+    ...(k === n ? multipliers.map((m) => oracleField(m.field, m.feed)) : []),
     field('coverage', 'Decimal', { formula: coverageExpr }),
     field('payDate', 'Date', { formula: `obsDate${k} + lag` }),
   ];
@@ -204,6 +224,9 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
   const priceOf = (a: string) => {
     if (a === 'cash' || a === colAsset('USD')) return '1';
     if (a.startsWith('col_')) return priceField(a.slice(4) as CollateralSymbol);
+    // A deliverable at its strike level per token, also a B20 stock (worth strike x multiplier): its multiplier is
+    // read only at the final observation, and a default can come before it, so it is left out. That values the
+    // token at most a multiplier's worth low (0.05% for NVDAc today), i.e. the holders take that much more of it.
     return basket ? `initialLevel_${a.slice(2)}` : 'initialLevel';
   };
   const defaultTakes: TemplateField[] = capped
@@ -632,7 +655,10 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
       flow(gw, ki.due, { name: 'Knocked in', isDefault: true });
     } else if (!basket) {
       const u = unds[0];
-      const ki = settle(n, 'KI', cpnExpr, { final: true, deliver: { sym: u.symbol, perUnit: '1 / initialLevel' } });
+      const ki = settle(n, 'KI', cpnExpr, {
+        final: true,
+        deliver: { sym: u.symbol, perUnit: perUnitDelivery(u.symbol, 'initialLevel') },
+      });
       flow(gw, ki.due, { name: 'Knocked in: deliver', isDefault: true });
     } else {
       // The worst performer is the one whose ratio equals perfN (same on-chain arithmetic, so exact).
@@ -642,7 +668,7 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
       unds.forEach((u, i) => {
         const ki = settle(n, `KI${u.symbol}`, cpnExpr, {
           final: true,
-          deliver: { sym: u.symbol, perUnit: `1 / initialLevel_${u.symbol}` },
+          deliver: { sym: u.symbol, perUnit: perUnitDelivery(u.symbol, `initialLevel_${u.symbol}`) },
         });
         const lastU = i === unds.length - 1;
         flow(

@@ -1,3 +1,4 @@
+import { isB20Symbol, isDeployedAddress } from './products/base-stocks';
 import {
   NOTE_CHAIN_IDS,
   NOTE_CHAINS,
@@ -297,10 +298,20 @@ export interface WireItem {
 }
 
 /**
- * What the vault on `asset` allows and the gateway on `home` registers receipts for: exactly REMOTE_COLLATERAL's
- * pair, so the deploy script, the served config and the term-sheet checks agree.
+ * What the vault on `asset` allows and the gateway on `home` registers receipts for: REMOTE_COLLATERAL's pair, so the
+ * deploy script, the served config and the term-sheet checks agree. A token not deployed yet (a B20 stand-in before
+ * scripts/deploy-base-stocks.sh) is left out; `pendingPlan` lists those.
  */
 export function wirePlan(home: NoteChain, asset: NoteChain): WireItem[] {
+  return planOf(home, asset).filter((w) => isDeployedAddress(w.token));
+}
+
+/** The pair's receipts whose token is not deployed yet: wired later, when it is (deploy-base-stocks.sh EXTEND_PAIR). */
+export function pendingPlan(home: NoteChain, asset: NoteChain): WireItem[] {
+  return planOf(home, asset).filter((w) => !isDeployedAddress(w.token));
+}
+
+function planOf(home: NoteChain, asset: NoteChain): WireItem[] {
   const m = REMOTE_COLLATERAL[home]?.[asset];
   if (!m) throw new Error(`no cross-chain collateral from ${asset} for notes on ${home}`);
   return Object.entries(m).map(([valuedAs, r]) => ({
@@ -341,6 +352,9 @@ export interface CrossChainDeployment {
 /**
  * What is wrong with a cross-chain deployment record (empty: nothing): the chains are note chains, selectors and
  * routers are the directory's, and the receipts are exactly the pair's wirePlan (symbol, locked token, decimals, feed).
+ * The B20 stock stand-ins (TSLAc.base…) are the one exception: added to a live pair after it was deployed
+ * (deploy-base-stocks.sh EXTEND_PAIR=1), so a record may lack them (they are then not served); one it has is checked
+ * like any other receipt.
  */
 export function checkCrossChainDeployment(x: CrossChainDeployment): string[] {
   const e: string[] = [];
@@ -362,8 +376,20 @@ export function checkCrossChainDeployment(x: CrossChainDeployment): string[] {
     if (r.router.toLowerCase() !== asset.router.toLowerCase()) e.push(`${r.chain} router ${r.router}`);
     if (!addr.test(r.vault)) e.push(`${r.chain} vault is not an address`);
     const plan = wirePlan(home.chain, asset.chain);
-    const got = Object.keys(r.receipts).sort();
-    const want = plan.map((w) => w.symbol).sort();
+    const optional = new Set(
+      planOf(home.chain, asset.chain)
+        .filter((w) => isB20Symbol(w.valuedAs))
+        .map((w) => w.symbol),
+    );
+    const got = Object.keys(r.receipts)
+      .filter((s) => !optional.has(s) || plan.some((w) => w.symbol === s))
+      .sort();
+    const extra = Object.keys(r.receipts).filter((s) => optional.has(s) && !plan.some((w) => w.symbol === s));
+    if (extra.length) e.push(`${r.chain} receipts ${extra.join(',')} lock a token not deployed yet`);
+    const want = plan
+      .map((w) => w.symbol)
+      .filter((s) => !optional.has(s) || s in r.receipts)
+      .sort();
     if (got.join() !== want.join()) e.push(`${r.chain} receipts ${got.join(',')} != ${want.join(',')}`);
     for (const w of plan) {
       const g = r.receipts[w.symbol];

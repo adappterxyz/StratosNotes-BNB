@@ -488,7 +488,12 @@ export function economicsView(
       collateral: [], // the schedule only: collateral is read from the chain
       worstAtMaturity:
         params.settlement === 'physical' && unds[worst]?.strike
-          ? { symbol: unds[worst].symbol, strike: unds[worst].strike! }
+          ? {
+              symbol: unds[worst].symbol,
+              strike: unds[worst].strike!,
+              // A B20 stock (TSLAc for TSLA on Base) delivers shares / multiplier, read at the final observation.
+              multiplier: num(`mult_${unds[worst].symbol}`) ?? undefined,
+            }
           : undefined,
     }).calls;
   }

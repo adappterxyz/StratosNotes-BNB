@@ -5,11 +5,19 @@ Chainlink on its asset's own oracle and delivered to the engine by Chainlink CRE
 Chainlink's reference data directory and committed as `packages/core/src/products/feeds-catalogue.ts`; `FEEDS` (by
 symbol) is derived from it.
 
-**Underlyings are not collateral.** What an issuer can pledge is a separate whitelist (`COLLATERAL_SYMBOLS`: USDG,
-WETH, and Robinhood's TSLA, AMZN, AMD, PLTR stock tokens on Robinhood Chain): only tokens a note can actually lock.
-Likewise physical delivery is limited to tokens that exist on Robinhood Chain (`deliverableToken`: WETH for ETH,
-Robinhood's TSLA, AMZN, AMD, PLTR); every other underlying, including all forex and commodities, settles in cash
-(final ÷ strike in USDG below the knock-in).
+**Underlyings are not collateral.** What an issuer can pledge is a separate whitelist (`COLLATERAL_SYMBOLS`: the
+stablecoin, WETH, Robinhood's TSLA, AMZN, AMD, PLTR stock tokens on Robinhood Chain, and on Base Sepolia the B20 stock
+stand-ins TSLAc, AMZNc, NVDAc, AAPLc, MSFTc, METAc): only tokens a note can actually lock. Likewise physical delivery
+is limited to tokens that exist on the note's chain (`deliverableToken`: WETH for ETH on both; Robinhood's TSLA, AMZN,
+AMD, PLTR on Robinhood Chain; on Base Sepolia TSLA, AMZN, NVDA, AAPL, MSFT and META in the B20 stand-ins, at shares ÷
+multiplier, once they are deployed); every other underlying, including all forex and commodities, settles in cash
+(final ÷ strike in the chain's dollar below the knock-in).
+
+**Share prices, not token prices.** An underlying is always the share (or coin, or currency): TSLA is Robinhood Chain
+mainnet's `Robinhood TSLA / USD` feed, whichever chain the note runs on. Coinbase's B20 stocks on Base have their own
+Chainlink feeds (`Coinbase TSLA` …, Base mainnet) that publish the TOKEN price, share price × the token's multiplier:
+those value TSLAc… as collateral only (keys `TSLAc`…, never `TSLA`) and are not in the catalogue. See
+[BASE-STOCKS.md](BASE-STOCKS.md).
 
 ## What is in it (generated 2026-10-26)
 
@@ -30,7 +38,14 @@ By chain: Robinhood Chain mainnet 35, Ethereum mainnet 53, Arbitrum One 53.
 | `ethereum-mainnet-arbitrum-1` | CRE EVM read (`EVMClient`), finalized block |
 | `robinhood-mainnet` | CRE HTTP capability, one batched JSON-RPC `eth_call` per run (`httpFeedChains`, `packages/core/src/feed-rpc.ts`): CRE has no EVM read there yet |
 
-A CRE target needs an `rpcs` entry for both EVM chains (`cre/project.yaml`); `config.*.json` keeps `httpFeedChains`
+Two more feed chains carry prices that are not underlyings ([BASE-STOCKS.md](BASE-STOCKS.md)):
+
+| Chain (CRE chain-selector name) | What | How the keeper reads it |
+|---|---|---|
+| `ethereum-mainnet-base-1` (Base, 8453) | Chainlink's per-token feeds of Coinbase's B20 stocks: the collateral price of TSLAc… | CRE EVM read, finalized block |
+| `ethereum-testnet-sepolia-base-1` (Base Sepolia, also a note chain) | each B20 stand-in's multiplier (`B20MultiplierFeed`), read at a physically settled Base note's last observation | CRE EVM read, finalized block |
+
+A CRE target needs an `rpcs` entry for every EVM chain (`cre/project.yaml`); `config.*.json` keeps `httpFeedChains`
 for Robinhood Chain mainnet. The fallback keeper has public RPCs for all three by default (`EVM_FEED_CHAINS`,
 `HTTP_FEED_CHAINS`). A worst-of basket has at most 3 underlyings (`MAX_UNDERLYINGS`), so a report costs at most 6 EVM
 reads, inside the keeper's 15-read budget per run.

@@ -130,6 +130,31 @@ and §4, adding the keeper's Base target (the staging config covers both chains)
 `CHAIN_ID=84532` and Base's engine, lens and RPC (`https://base-sepolia-rpc.publicnode.com`; `https://sepolia.base.org` caps eth_getLogs at 200 blocks). The CRE workflow needs an RPC for
 `ethereum-testnet-sepolia-base-1` in `cre/project.yaml` (staging target).
 
+## 2c. Stocks on Base Sepolia: the B20 stand-ins
+
+Coinbase's tokenized stocks exist on Base mainnet only, so Base Sepolia gets notes.markets' test stand-ins (TSLAc,
+AMZNc, NVDAc, AAPLc, MSFTc, METAc), their multiplier feeds and a rate-limited faucet ([BASE-STOCKS.md](BASE-STOCKS.md)).
+Nothing is broadcast until you run it; rehearse first.
+
+```bash
+# 0. On anvil forks (Base Sepolia, and Robinhood Chain testnet for the pair extension): anvil's key, never .keys
+REHEARSAL=1 EXTEND_PAIR=1 bash scripts/deploy-base-stocks.sh
+
+# 1. Live: the stand-ins, feeds and faucet on Base Sepolia, and TSLAc.base… on the Robinhood-home / Base-vault pair
+EXTEND_PAIR=1 bash scripts/deploy-base-stocks.sh
+#   -> deployments/base-stocks/base-sepolia.json, packages/core/src/products/base-stocks.deployed.ts,
+#      deployments/crosschain/robinhood-testnet.json (+ 6 receipts), config.staging.json, deployments/server/*.json
+npx tsx scripts/base-stocks.ts sync   # read-only: every stand-in's multiplier = its real token's
+```
+
+Then commit those files, deploy the Worker (§3: the served tokens), rebuild the CRE workflow (§4; core is bundled into
+it, and `cre/project.yaml` lists `ethereum-mainnet-base-1` for the per-token feeds) and restart the issuer bots.
+
+Measured on anvil forks on 2026-11-15 (`REHEARSAL=1 EXTEND_PAIR=1`, Base Sepolia gas price 0.0054 gwei): the stand-ins,
+feeds and faucet 11.06M gas over 25 transactions on Base Sepolia (~0.00006 ETH; the script checks for 0.003 ETH); the
+pair extension 0.29M gas (6 `setToken`) on Base Sepolia and 5.50M gas (6 receipts) on Robinhood Chain testnet. The
+rehearsal also claims from the faucet (`claimAll`) and checks that a second claim inside the cooldown reverts.
+
 ## 3. Reset the D1 read model, then deploy the Worker
 
 The Worker (`web/wrangler.jsonc`: same name, routes and D1 database `notes-markets` as before) serves the API from D1

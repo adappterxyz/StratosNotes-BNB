@@ -298,7 +298,7 @@ contract CrossChainPairsTest is ProductsBase {
         vm.prank(issuer);
         pid = engine.startProcess(id, 1, _roles(issuer, pa), t, f.startStep, _none(), "Note", "NOTE");
         vm.startPrank(issuer);
-        for (uint256 k = 1; k < 5; k++) tokens[k].approve(address(engine), type(uint256).max);
+        for (uint256 k = 1; k < tokens.length; k++) tokens[k].approve(address(engine), type(uint256).max);
         d.rEth.approve(address(engine), type(uint256).max);
         d.rUsd.approve(address(engine), type(uint256).max);
         vm.stopPrank();

@@ -16,6 +16,7 @@ import {
 import {
   CHAIN_CASH,
   CHAIN_TOKENS,
+  isDeployedToken,
   isNoteChain,
   isRetiredTestToken,
   NOTE_CHAINS,
@@ -65,9 +66,18 @@ export function servedStablecoin(key: NoteChain) {
   return { symbol: c.token, address: CHAIN_TOKENS[key][c.token].address, decimals: c.decimals };
 }
 
-/** The chain's real tokens by symbol (CHAIN_TOKENS: USDG/USDC, WETH, Robinhood's stock tokens). */
+/**
+ * The chain's real tokens by symbol (CHAIN_TOKENS: USDG/USDC, WETH, Robinhood's stock tokens; on Base Sepolia the B20
+ * stock stand-ins once deployed: a token still at the NOT_DEPLOYED placeholder is not served).
+ */
 export const realTokens = (key: string): Record<string, string> =>
-  isNoteChain(key) ? Object.fromEntries(Object.values(CHAIN_TOKENS[key]).map((t) => [t.token, t.address])) : {};
+  isNoteChain(key)
+    ? Object.fromEntries(
+        Object.values(CHAIN_TOKENS[key])
+          .filter(isDeployedToken)
+          .map((t) => [t.token, t.address]),
+      )
+    : {};
 
 /** Receipts of retired test tokens (tTSLA.rh…) are never served. */
 const liveReceipts = (r: CrossChainDeployment['remotes'][number]['receipts']) =>

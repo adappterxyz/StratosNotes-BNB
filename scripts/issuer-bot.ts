@@ -693,14 +693,15 @@ async function tick() {
     const period = e.periods.find((p) => p.deliver && (p.status === 'due' || p.status === 'grace'));
     if (period?.deliver && !miss.has(`${pid}:${period.k}`)) {
       const d = actions.delivery.find((x) => x.symbol === period.deliver!.symbol);
-      // The real token delivered for the underlying (WETH for ETH, Robinhood's TSLA…); older notes named it tTSLA.
+      // The real token delivered for the underlying (WETH for ETH, Robinhood's TSLA…, a B20 stock on Base: TSLAc for
+      // TSLA, whose perUnit already divides by its multiplier); older notes named it tTSLA.
       const sym = period.deliver.symbol;
       const names = new Set([
         sym,
         `t${sym}`,
         ...Object.values(CHAIN_TOKENS)
           .flatMap((c) => Object.values(c))
-          .filter((t) => t.valuedAs === sym)
+          .filter((t) => t.valuedAs === sym || t.b20?.delivers === sym)
           .map((t) => t.token),
       ]);
       const asset = def.assets.findIndex((a) => names.has(a.name));

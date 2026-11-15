@@ -13,7 +13,7 @@ import {ProductsBase} from "./Products.t.sol";
 /// collateral, try to report as a stranger, poke. Ghost state records anything that should never happen.
 contract NoteHandler is Test {
     FlowEngine public engine;
-    MockERC20[5] public tokens;
+    MockERC20[6] public tokens;
     bytes internal fixture; // the fixture, ABI-encoded (structs with nested arrays don't copy to storage)
     uint256 public pid;
     address public issuer;
@@ -32,7 +32,7 @@ contract NoteHandler is Test {
     bool public strangerDepositLost;
     uint256 public calls;
 
-    constructor(FlowEngine engine_, MockERC20[5] memory tokens_, bytes memory fixture_, uint256 pid_, address issuer_, address pa_, address forwarder_, address[] memory investors_) {
+    constructor(FlowEngine engine_, MockERC20[6] memory tokens_, bytes memory fixture_, uint256 pid_, address issuer_, address pa_, address forwarder_, address[] memory investors_) {
         engine = engine_;
         tokens = tokens_;
         fixture = fixture_;
@@ -357,7 +357,7 @@ contract EngineFuzz is ProductsBase {
         vm.prank(issuer);
         uint256 pid = engine.startProcess(id, 1, _roles(issuer, makeAddr("p")), assetTokens, f.startStep, _none(), "Note", "NOTE");
         vm.startPrank(issuer);
-        for (uint256 t = 1; t < 5; t++) tokens[t].approve(address(engine), type(uint256).max);
+        for (uint256 t = 1; t < tokens.length; t++) tokens[t].approve(address(engine), type(uint256).max);
         for (uint256 k = 0; k < f.pledges.length; k++) tokens[f.pledges[k].token].mint(issuer, f.pledges[k].base);
         engine.executeStep(pid, f.approveStep, NO, f.approveInputs);
         engine.executeStep(pid, f.mandateStep, NO, _none());
