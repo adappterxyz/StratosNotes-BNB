@@ -14,6 +14,7 @@ import { ArrowLeft, ArrowRight, Workflow } from 'lucide-react';
 import '../issue.css';
 import {
   check,
+  canPledgeNow,
   collateralTokenOf,
   compileTemplate,
   economicsOf,
@@ -290,7 +291,8 @@ export default function IssueWizard() {
   const errors = validateProductParams(p);
   const remote = isRemoteCollateral(p);
   const chainCfg = config.chains.find((c) => c.key === chainKey);
-  const colToken = (c: CollateralSymbol) => collateralTokenOf(p, c)?.token ?? null;
+  // Only tokens that can be pledged now: a B20 stand-in stays hidden until it is deployed.
+  const colToken = (c: CollateralSymbol) => (canPledgeNow(p, c) ? (collateralTokenOf(p, c)?.token ?? null) : null);
   const sym = config.chains.find((c) => c.key === chainKey)?.stablecoin.symbol ?? 'USD';
   const { demo, t, timingBad, strikeAt, dateOf, fmtT, dur } = issueSchedule(every, strikeIn, timing, eco);
   const schedule = {

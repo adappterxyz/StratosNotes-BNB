@@ -10,6 +10,7 @@ import {
   cashTokenOf,
   chainLabel,
   COLLATERAL_SYMBOLS,
+  canPledgeNow,
   collateralTokenOf,
   DEFAULT_HAIRCUT,
   deliverableToken,
@@ -99,7 +100,8 @@ export function ProductForm({
       defaultRule: p.defaultRule,
     });
   /** The token a collateral chip pledges, or null when the note's chain has none. */
-  const colToken = (c: CollateralSymbol) => collateralTokenOf(p, c)?.token ?? null;
+  // Only tokens that can be pledged now: a B20 stand-in stays hidden until it is deployed.
+  const colToken = (c: CollateralSymbol) => (canPledgeNow(p, c) ? (collateralTokenOf(p, c)?.token ?? null) : null);
   const delivered = p.underlyings.map((u) => deliverableToken(p, u.symbol)?.token ?? `no ${u.symbol} token`).join('/');
   const eco = economicsOf(p);
   const colSyms = eco.collateral.map((c) => c.symbol);
