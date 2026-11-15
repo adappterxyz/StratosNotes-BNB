@@ -11,10 +11,8 @@ import type { ProductParams } from '@sn/core';
 import type { Schedule } from '../lib/listing';
 import { bandRange, checkWhen, linesOf, playOut, scenarios, type PlayEvent } from '../lib/story';
 
-const W = 720;
 const H = 300;
 const X0 = 52;
-const X1 = W - 16;
 const Y0 = H - 34;
 const Y1 = 18;
 const STEP_MS = 900;
@@ -44,6 +42,17 @@ export function PlayNote({
   const [shown, setShown] = useState(n);
   const [playing, setPlaying] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The chart is drawn at its box's own width, so its text stays readable on a phone.
+  const box = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(720);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(300, Math.min(900, Math.round(e.contentRect.width)))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const X1 = W - 16;
   useEffect(() => {
     setPerfs((x) => fit(x, n));
     setShown(n);
@@ -168,7 +177,7 @@ export function PlayNote({
         )}
       </div>
       <div className="play-grid">
-        <div className="play-chart">
+        <div className="play-chart" ref={box}>
           <svg
             ref={svg}
             viewBox={`0 0 ${W} ${H}`}
@@ -209,7 +218,7 @@ export function PlayNote({
                 y={Y0 + 20}
                 textAnchor={k === 0 ? 'start' : k === n ? 'end' : 'middle'}
               >
-                {k === 0 ? 'Start' : n > 6 ? k : `Check ${k}`}
+                {k === 0 ? 'Start' : n > 6 || W < 480 ? k : `Check ${k}`}
               </text>
             ))}
             {lines.map((l) => (

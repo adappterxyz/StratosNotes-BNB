@@ -1103,3 +1103,7 @@ table.t th,
   font-weight: 700;
   letter-spacing: -0.025em;
 }
+.nc.preview .nc-mid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
