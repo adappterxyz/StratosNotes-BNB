@@ -17,8 +17,19 @@ import type { ChainConfig } from '../../lib/api';
 import { fmtMoney, lockedAsset } from '../../lib/format';
 import { AssetIcon } from '../AssetIcon';
 import { Num } from './Num';
+import { Presets, Slider } from './controls';
 import type { Timing } from './schedule';
 import { TermErrors } from './TermErrors';
+
+const DEMO_TIMING = [
+  { label: 'Fast demo', sub: '30 s to pay, 60 s extra', t: { lag: 30, grace: 60 } },
+  { label: 'Relaxed demo', sub: '40 s to pay, 60 s extra', t: { lag: 40, grace: 60 } },
+];
+const REAL_TIMING = [
+  { label: 'Standard', sub: '2 days to pay, 2 days extra', t: { lag: 2 * 86400, grace: 2 * 86400 } },
+  { label: 'Quick', sub: '1 day to pay, 1 day extra', t: { lag: 86400, grace: 86400 } },
+  { label: 'Generous', sub: '2 days to pay, 7 days extra', t: { lag: 2 * 86400, grace: 7 * 86400 } },
+];
 
 /** Step 4, Collateral: where it is held, what is locked, the ratio, payment timing and the default rule. */
 export function CollateralStep({
@@ -80,8 +91,8 @@ export function CollateralStep({
         payment, holders take what they're owed from the collateral, up to its value.
       </p>
       <div className="field" data-held-on={heldKey}>
-        <span className="lbl">Held on</span>
-        <div className="seg" role="radiogroup" aria-label="Collateral held on">
+        <span className="lbl">Where the collateral sits</span>
+        <div className="seg iw-seg-wrap" role="radiogroup" aria-label="Collateral held on">
           {heldOn.map((h) => (
             <button
               key={h.key}
@@ -157,31 +168,62 @@ export function CollateralStep({
           </span>
         )}
       </div>
-      <div className="form-grid">
-        <Num
-          id="iw-ratio"
-          label="Collateral ratio (of size)"
-          suffix="%"
-          value={eco.collateralRatioPct}
-          onChange={(v) => set({ collateralRatioPct: v })}
-          hint={`${fmtMoney((eco.collateralRatioPct / 100) * size)} ${sym} of value required.`}
+      <Slider
+        id="iw-ratio"
+        label="How much collateral"
+        tech="collateral ratio, % of what's sold"
+        value={eco.collateralRatioPct}
+        onChange={(v) => set({ collateralRatioPct: v })}
+        min={50}
+        max={200}
+        step={5}
+        suffix="%"
+        safe={{ from: 100, to: 200, label: 'covers every unit' }}
+        hint={`${fmtMoney((eco.collateralRatioPct / 100) * size)} ${sym} of value locked if all ${fmtMoney(size, 0)} units sell.`}
+        warn={
+          eco.collateralRatioPct < 100
+            ? 'Below 100%, a default can leave investors short: most investors look for 100% or more.'
+            : null
+        }
+      />
+      <div className="iw-field">
+        <div className="iw-field-h">
+          <span className="lbl">Time to pay investors, then extra time before default</span>
+        </div>
+        <Presets
+          label="Payment timing"
+          options={(demo ? DEMO_TIMING : REAL_TIMING).map((o) => ({ label: o.label, sub: o.sub, value: o.t }))}
+          value={t}
+          onPick={(v) => setTiming(v)}
         />
-        <Num
-          id="is-lag"
-          label={`Pay holders within (${demo ? 'seconds' : 'days'})`}
-          value={demo ? t.lag : t.lag / 86400}
-          min={0}
-          onChange={(v) => setTiming({ ...t, lag: Math.max(0, v || 0) * (demo ? 1 : 86400) })}
-          hint="After each observation."
-        />
-        <Num
-          id="is-grace"
-          label={`Grace period (${demo ? 'seconds' : 'days'})`}
-          value={demo ? t.grace : t.grace / 86400}
-          min={0}
-          onChange={(v) => setTiming({ ...t, grace: Math.max(0, v || 0) * (demo ? 1 : 86400) })}
-          hint={`Up to ${MAX_GRACE_DAYS} days, then default.`}
-        />
+        <div className="iw-pair">
+          <div className="field">
+            <label htmlFor="is-lag">Pay within ({demo ? 'seconds' : 'days'}) of each check</label>
+            <input
+              id="is-lag"
+              type="number"
+              min={0}
+              value={demo ? t.lag : t.lag / 86400}
+              onChange={(e) => setTiming({ ...t, lag: Math.max(0, Number(e.target.value) || 0) * (demo ? 1 : 86400) })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="is-grace">Extra time ({demo ? 'seconds' : 'days'}, grace)</label>
+            <input
+              id="is-grace"
+              type="number"
+              min={0}
+              value={demo ? t.grace : t.grace / 86400}
+              onChange={(e) =>
+                setTiming({ ...t, grace: Math.max(0, Number(e.target.value) || 0) * (demo ? 1 : 86400) })
+              }
+            />
+          </div>
+        </div>
+        <span className="hint">
+          You fund each payment by its date; if you miss it, the extra time (up to {MAX_GRACE_DAYS} days) follows, then
+          holders are paid from the collateral.
+        </span>
       </div>
       {timingBad && <div className="notice warn">{timingBad}</div>}
       <details className="adv">
@@ -193,7 +235,7 @@ export function CollateralStep({
               <Num
                 key={c.symbol}
                 id={`iw-hc-${c.symbol}`}
-                label={`${lockedAsset(colToken(c.symbol) ?? c.symbol)} counted at (of value)`}
+                label={`${lockedAsset(colToken(c.symbol) ?? c.symbol)} counted at (haircut, % of its value)`}
                 suffix="%"
                 value={c.haircutPct}
                 onChange={(v) =>

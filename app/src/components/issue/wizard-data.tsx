@@ -5,40 +5,51 @@ import { EXAMPLE_PRODUCTS, FEEDS, type ProductParams } from '@sn/core';
 import type { NoteKind } from '../../lib/readymade';
 
 export type Kind = NoteKind;
-export const PRODUCTS: Array<{ kind: Kind; icon: ReactNode; title: string; line: string }> = [
-  { kind: 'fcn', icon: <Repeat />, title: 'Fixed coupon note', line: 'Steady income: the same coupon every period.' },
+export const PRODUCTS: Array<{ kind: Kind; icon: ReactNode; title: string; tech: string; line: string }> = [
+  {
+    kind: 'fcn',
+    icon: <Repeat />,
+    title: 'Steady income',
+    tech: 'Fixed coupon note',
+    line: 'The same coupon every period, whatever the price does. Can repay early.',
+  },
   {
     kind: 'reverse-convertible',
     icon: <ArrowLeftRight />,
-    title: 'Reverse convertible',
-    line: 'A higher coupon; may pay back in stock.',
+    title: 'Higher income',
+    tech: 'Reverse convertible',
+    line: 'A bigger fixed coupon; below the money-back line it pays back in stock or its value.',
   },
   {
     kind: 'phoenix',
     icon: <Flame />,
-    title: 'Phoenix',
-    line: 'Coupons while the price stays above a barrier, with memory.',
+    title: 'Income while it holds',
+    tech: 'Phoenix',
+    line: 'A coupon at each check the price is above a line; missed ones can be paid later.',
   },
   {
     kind: 'snowball',
     icon: <Snowflake />,
-    title: 'Snowball',
-    line: 'The payout grows each period until it is called.',
+    title: 'Growing payout',
+    tech: 'Snowball',
+    line: 'Nothing until it repays; then a coupon for every period that passed.',
   },
   {
     kind: 'ppn',
     icon: <ShieldCheck />,
-    title: 'Principal-protected',
-    line: 'Money back at maturity, plus a share of the upside.',
+    title: 'Capital protected',
+    tech: 'Principal-protected note',
+    line: 'Money back at the end, plus a share of any rise.',
   },
   {
     kind: 'worst-of',
     icon: <Layers />,
-    title: 'Worst-of',
-    line: 'Any of these on a basket: the weakest asset decides.',
+    title: 'On a basket',
+    tech: 'Worst-of',
+    line: 'Any of these on two or three assets: the weakest one decides.',
   },
 ];
-export const STEPS = ['Product', 'Terms', 'Schedule', 'Collateral', 'Review & issue'] as const;
+export const STEPS = ['Basics', 'Terms', 'Schedule', 'Collateral', 'Review & issue'] as const;
 
 /**
  * The recorded demo's note (?product=reverse-convertible&demo=tsla): a TSLA reverse convertible on Robinhood Chain,

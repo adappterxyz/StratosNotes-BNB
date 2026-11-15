@@ -1,0 +1,587 @@
+/* The issue builder (pages/IssueWizard.tsx, components/issue/*): the network first, three ways in, sliders and
+   presets, and the live preview. Brand tokens from styles.css; the semantic aliases (--good, --risk, --ink, --line,
+   --inset, --slate, --dimc) from ux.css. Light and .dark both follow the tokens. */
+
+.iw .maxw-200 {
+  max-width: 200px;
+}
+.iw .maxw-240 {
+  max-width: 240px;
+}
+.iw .gap-16 {
+  gap: 16px;
+}
+
+/* ---- entry page ------------------------------------------------------------------------------------------------ */
+.iw-q {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+}
+.iw-q h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 650;
+}
+.iw-qn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: hsl(var(--card));
+  font: 600 13px var(--mono);
+  flex: none;
+}
+.iw-q-wait {
+  padding: 4px 0 0 36px;
+}
+.iw-chains {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+.iw-chain {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: hsl(var(--card));
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  min-width: 0;
+}
+.iw-chain:hover {
+  border-color: var(--ink);
+}
+.iw-chain.on {
+  border-color: var(--good);
+  box-shadow: 0 0 0 1px var(--good) inset;
+  background: color-mix(in srgb, var(--good) 7%, hsl(var(--card)));
+}
+.iw-chain-name {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.iw-chain-cash {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.iw-chain-toks {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--slate);
+  min-width: 0;
+}
+.iw-chain-toks > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.iw-chain-net {
+  font-size: 12px;
+  color: var(--dimc);
+}
+.iw-doors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 10px;
+}
+.iw-doorbtn {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: hsl(var(--card));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.iw-doorbtn:hover {
+  border-color: var(--line-strong);
+}
+.iw-doorbtn.on {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink) inset;
+}
+.iw-doorbtn-t {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 600;
+}
+.iw-doorbtn-t .tag {
+  color: var(--good-text);
+  border-color: color-mix(in srgb, var(--good) 40%, transparent);
+  background: var(--good-soft);
+}
+.iw-doorbtn-d {
+  font-size: 13px;
+  color: var(--slate);
+}
+.iw-panel {
+  padding-top: 6px;
+}
+.iw-card .xs.dim {
+  margin-top: 2px;
+}
+
+/* ready-made notes, as investors see them */
+.tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 14px;
+}
+.nc.tpl {
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  gap: 12px;
+  padding: 16px;
+  min-width: 0;
+}
+button.nc.tpl:hover,
+a.nc.tpl:hover {
+  border-color: var(--ink);
+  text-decoration: none;
+}
+.nc.tpl .nc-top {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.nc.tpl h3 {
+  font-size: 16px;
+}
+.tpl-rate {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.tpl-rate strong {
+  font-family: var(--font);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.tpl-rate span {
+  font-size: 13px;
+  color: var(--slate);
+}
+.tpl-moved {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--slate);
+  background: var(--inset);
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+/* ---- wizard frame ---------------------------------------------------------------------------------------------- */
+.iw-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.iw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 5px 6px 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: hsl(var(--card));
+  color: var(--slate);
+}
+.iw-chip b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.iw-chip .linkish {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--inset);
+}
+.iw-chip .linkish .i {
+  width: 13px;
+  height: 13px;
+}
+.iw-step h2 .iw-tech {
+  font: 500 12px var(--font);
+  color: var(--dimc);
+  margin-left: 10px;
+}
+.iw-side.iw-preview {
+  gap: 12px;
+  background: none;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.iw-side-h {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--slate);
+}
+
+/* risk meter */
+.risk {
+  display: grid;
+  gap: 6px;
+  background: hsl(var(--card));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.risk-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 600;
+}
+.risk-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.risk-bar span {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  transition: background 0.3s;
+}
+.risk.r-low .risk-bar .on {
+  background: var(--good);
+}
+.risk.r-mid .risk-bar .on {
+  background: hsl(var(--warning));
+}
+.risk.r-high .risk-bar .on {
+  background: var(--risk);
+}
+
+/* the side preview is narrow: rate above the facts */
+.iw-side .nc-mid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+/* ---- sliders and presets --------------------------------------------------------------------------------------- */
+.sl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 18px 24px;
+}
+.sl {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+.sl-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.sl-head label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sl-head label small {
+  font-weight: 400;
+  color: var(--dimc);
+  font-size: 12px;
+}
+.sl-num {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.sl-num input {
+  width: 84px;
+  height: 34px !important;
+  padding: 4px 8px;
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.sl-num .suffix {
+  font-size: 13px;
+  color: var(--dimc);
+}
+.sl input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+.sl input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--good) var(--fill, 50%), var(--line) var(--fill, 50%));
+}
+.sl input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--good) var(--fill, 50%), var(--line) var(--fill, 50%));
+}
+.sl input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: hsl(var(--card));
+  border: 2px solid var(--good);
+  box-shadow: 0 1px 3px hsl(218 22% 7% / 0.2);
+}
+.sl input[type='range']::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: hsl(var(--card));
+  border: 2px solid var(--good);
+}
+.sl input[type='range']:focus-visible {
+  outline: 2px solid var(--good);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.sl-safe {
+  position: relative;
+  height: 16px;
+  margin: -4px 0 0;
+}
+.sl-safe span {
+  position: absolute;
+  top: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--good) 55%, transparent);
+}
+.sl-safe em {
+  position: absolute;
+  top: 4px;
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--good-text);
+  white-space: nowrap;
+}
+.sl .hint {
+  font-size: 13px;
+  color: var(--dimc);
+  line-height: 1.45;
+}
+.sl-warn {
+  font-size: 13px;
+  line-height: 1.45;
+  color: hsl(var(--warning));
+  background: hsl(var(--warning) / 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.iw-field {
+  display: grid;
+  gap: 8px;
+}
+.iw-field-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.iw-field-h label,
+.iw-field-h .lbl {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.iw-field .hint {
+  font-size: 13px;
+  color: var(--dimc);
+}
+.iw-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.preset {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: hsl(var(--card));
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.preset b {
+  font-weight: 600;
+  font-size: 14px;
+}
+.preset small {
+  font-size: 12px;
+  color: var(--dimc);
+}
+.preset:hover {
+  border-color: var(--ink);
+}
+.preset.star {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--good) 60%, transparent);
+}
+.preset.on {
+  border-color: var(--good);
+  border-style: solid;
+  box-shadow: 0 0 0 1px var(--good) inset;
+  background: var(--good-soft);
+}
+.iw-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 10px 14px;
+}
+.iw-timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.iw-tl-dot {
+  display: grid;
+  font-size: 12px;
+  color: var(--slate);
+  background: var(--inset);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.iw-tl-dot b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.iw-tl-dot.start,
+.iw-tl-dot.end {
+  border-color: var(--line-strong);
+}
+.iw-demo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--good-text);
+}
+
+/* ---- review ---------------------------------------------------------------------------------------------------- */
+.iw-rev {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.iw-rev-col {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.iw-rev-col h3 {
+  font-size: 16px;
+  font-weight: 650;
+}
+.iw-rev .iw-side {
+  position: static;
+}
+.iw-rev .iw-side-h {
+  display: none;
+}
+.iw-says,
+.iw-commit {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.iw-says li,
+.iw-commit li {
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--inset);
+  border: 1px solid var(--line);
+}
+.iw-says li.good {
+  border-left: 3px solid var(--good);
+}
+.iw-says li.risk {
+  border-left: 3px solid var(--risk);
+}
+.iw-commit li b {
+  font-weight: 600;
+}
+.iw-step .play {
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 860px) {
+  .iw-rev {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .sl-head {
+    flex-wrap: wrap;
+  }
+  .iw-q-wait {
+    padding-left: 0;
+  }
+  .iw-chip {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .risk-bar span,
+  .iw-chain {
+    transition: none;
+  }
+}
+
+.iw-seg-wrap {
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.iw-seg-wrap button {
+  white-space: normal;
+  text-align: left;
+  min-width: 0;
+}

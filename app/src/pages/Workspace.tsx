@@ -1,12 +1,12 @@
 /**
  * The advanced editor (/issue/advanced): Flow's workspace, for structured notes. It always opens FROM an existing
  * workflow, by deep link from /issue: a note's terms (?params=, ?product=), a saved workflow (?template=), or the AI's
- * draft (?draft=ai). With nothing loaded it points back to the three ways in on /issue; there is no blank canvas.
+ * draft (?draft=ai). With nothing to load it redirects to /issue; there is no blank canvas.
  * With a workflow open it is the AI assistant, the BPMN canvas and the stages in order:
  * Overview | Properties -> Validate -> Payoff -> Ready-made note -> Issue.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import Modeler from 'bpmn-js/lib/Modeler';
 import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-js.css';
@@ -76,7 +76,18 @@ interface Doc extends DocInfo {
   pristine: string;
 }
 
+/**
+ * The advanced editor opens only with a workflow to load (?template=, ?product=, ?params=, ?draft=ai): with nothing to
+ * load it is not a page of its own, so the address goes back to Issue, where every way in starts.
+ */
 export default function Workspace() {
+  const [search] = useSearchParams();
+  const loads = ['template', 'product', 'params', 'draft'].some((k) => !!search.get(k));
+  if (!loads) return <Navigate to="/issue" replace />;
+  return <Editor />;
+}
+
+function Editor() {
   const [search, setSearch] = useSearchParams();
   const host = useRef<HTMLDivElement>(null);
   const modeler = useRef<any>(null);

@@ -1,11 +1,20 @@
-import { chainLabel, PRODUCT_LABELS, type CollateralSymbol, type economicsOf, type ProductParams } from '@sn/core';
+import { useState } from 'react';
+import { chainLabel, type CollateralSymbol, type economicsOf, type ProductParams } from '@sn/core';
 import { fmtMoney, lockedAsset } from '../../lib/format';
-import { AssetStack } from '../AssetIcon';
+import type { Schedule } from '../../lib/listing';
+import { getLine, riskLine } from '../../lib/story';
+import PayoffChart from '../PayoffChart';
+import { PlayNote } from '../PlayNote';
 import { IssuePanel, TemplatePanel, type Built, type DocInfo, type IssuePreset } from '../Stages';
 import { FlowPreview } from '../StepPanel';
+import { IssuePreview } from './Preview';
 import type { Every, Timing } from './schedule';
 
-/** Step 5, Review & issue: what investors get and what the issuer commits to, then the issue panel. */
+/**
+ * Step 5, Review & issue: what investors will see (their card, what they get and the main risk) and what you commit
+ * to, a chance to play the note through before issuing, then the issue panel. The workflow diagram the note is
+ * compiled from, and the payout chart, sit under "Under the hood".
+ */
 export function ReviewStep({
   p,
   eco,
@@ -22,6 +31,8 @@ export function ReviewStep({
   doc,
   preset,
   xml,
+  chainKey,
+  schedule,
 }: {
   p: ProductParams;
   eco: ReturnType<typeof economicsOf>;
@@ -37,78 +48,94 @@ export function ReviewStep({
   built: Built | null;
   doc: DocInfo;
   preset: IssuePreset;
-  /** The workflow the note is compiled from (BPMN), drawn for review. */
+  /** The workflow the note is compiled from (BPMN), drawn under the hood. */
   xml: string;
+  chainKey: string;
+  schedule: Schedule;
 }) {
-  const syms = p.underlyings.map((u) => u.symbol);
+  const [hood, setHood] = useState(false);
+  const locked = eco.collateral.map((c) => lockedAsset(colToken(c.symbol) ?? c.symbol)).join(' + ');
   return (
     <>
       <h2>Review & issue</h2>
-      <dl className="iw-review">
-        <dt>Note</dt>
-        <dd>
-          <strong>{p.name}</strong> · {PRODUCT_LABELS[p.productType]} on <AssetStack syms={syms} size={16} />
-        </dd>
-        <dt>Size</dt>
-        <dd>
-          {fmtMoney(size, 0)} {sym}, book open until {fmtT(strikeAt)}; {p.observations} observations every {every.n}{' '}
-          {every.unit}.
-        </dd>
-        <dt>Investors get</dt>
-        <dd>
-          {p.couponRatePct
-            ? `${p.couponRatePct}% ${p.productType === 'snowball' ? 'added each period, paid when called' : 'coupon each period'} in ${sym}${p.couponBarrierPct ? ` while the worst price is at least ${p.couponBarrierPct}% of strike` : ''}. `
-            : ''}
-          {p.autocallLevelPct ? `Repaid early at ${p.autocallLevelPct}% or more. ` : ''}
-          {p.protectionPct ? `${p.protectionPct}% back at maturity plus ${p.participationPct}% of any rise. ` : ''}
-          {p.knockInBarrierPct
-            ? `Below ${p.knockInBarrierPct}% at maturity: ${p.settlement === 'physical' ? 'the stock instead of cash' : `final ÷ strike in ${sym}`}.`
-            : ''}
-        </dd>
-        <dt>Payouts</dt>
-        <dd>
-          {p.payouts === 'push'
-            ? "Paid to holders' wallets automatically; you cover the gas."
-            : 'Holders claim any time from their portfolio; they pay their own gas.'}
-        </dd>
-        <dt>You commit to</dt>
-        <dd>
-          <ul className="iw-list">
-            <li>
-              Lock {eco.collateral.map((c) => lockedAsset(colToken(c.symbol) ?? c.symbol)).join(' + ')} worth at least{' '}
-              {eco.collateralRatioPct}% of what's sold
-              {remote && p.collateralChain ? `, locked on ${chainLabel(p.collateralChain)}` : ''}, until the last
-              payment.
-            </li>
-            <li>
-              Fund each payment within {dur(t.lag)} of its observation; a {dur(t.grace)} grace period follows.
-            </li>
-            <li>
-              If a payment is still missing, holders take{' '}
-              {eco.defaultRule === 'cap-at-owed' ? "what they're owed" : 'everything in escrow'} from the collateral.
-            </li>
-            {p.payouts === 'push' && (
-              <li>Send each payment to every holder's wallet and pay the gas (run the issuer bot).</li>
-            )}
+      <div className="iw-rev">
+        <section className="iw-rev-col" aria-labelledby="rev-see">
+          <h3 id="rev-see">What investors see</h3>
+          <IssuePreview p={p} cash={sym} chainKey={chainKey} schedule={schedule} size={size} />
+          <ul className="iw-says">
+            <li className="good">{getLine(p, sym)}</li>
+            <li className="risk">{riskLine(p, sym)}</li>
           </ul>
-        </dd>
-      </dl>
-      {xml && (
-        <details className="adv iw-flow" open data-review-flow>
-          <summary>How this note runs</summary>
-          <div className="adv-body">
-            <p className="xs muted m-0">
-              The note's workflow, step by step, as it will run on-chain. This diagram is what gets compiled and issued.
-            </p>
-            <FlowPreview xml={xml} params={p} label="How this note runs" />
-          </div>
-        </details>
-      )}
+        </section>
+        <section className="iw-rev-col" aria-labelledby="rev-commit">
+          <h3 id="rev-commit">What you commit to</h3>
+          <ul className="iw-commit">
+            <li>
+              <b>
+                Raise up to {fmtMoney(size, 0)} {sym}.
+              </b>{' '}
+              The book is open until {fmtT(strikeAt)}; the price is checked {p.observations} time
+              {p.observations === 1 ? '' : 's'}, every {every.n} {every.unit}.
+            </li>
+            <li>
+              <b>
+                Lock {locked} worth at least {eco.collateralRatioPct}% of what's sold
+              </b>
+              {remote && p.collateralChain ? `, locked on ${chainLabel(p.collateralChain)}` : ''}, until the last
+              payment. It is yours again once every payment is made.
+            </li>
+            <li>
+              <b>Fund each payment within {dur(t.lag)} of its check.</b> If one is late, {dur(t.grace)} of extra time
+              follows.
+            </li>
+            <li>
+              <b>If a payment is still missing,</b> holders take{' '}
+              {eco.defaultRule === 'cap-at-owed'
+                ? "what they're owed from the collateral, and the rest comes back to you"
+                : 'everything in escrow'}
+              .
+            </li>
+            <li>
+              {p.payouts === 'push'
+                ? "You send each payment to every holder's wallet and pay the gas (run the issuer bot)."
+                : 'Holders claim their payouts any time from their portfolio, and pay their own gas.'}
+            </li>
+          </ul>
+        </section>
+      </div>
+
+      <PlayNote p={p} cash={sym} schedule={schedule} title="Try it before you issue" />
+
       {built ? (
         <IssuePanel key={JSON.stringify(preset) + p.name} doc={doc} built={built} preset={preset} compact />
       ) : (
         <div className="notice err">This note doesn't compile: go back and check its terms.</div>
       )}
+
+      <details
+        className="adv iw-flow"
+        data-review-flow
+        onToggle={(e) => setHood((e.target as HTMLDetailsElement).open)}
+      >
+        <summary>Under the hood: how this note runs on-chain</summary>
+        <div className="adv-body stack gap-12">
+          {hood && xml && (
+            <>
+              <p className="xs muted m-0">
+                The note's workflow, step by step, as it will run on-chain. This diagram is what gets compiled and
+                issued.
+              </p>
+              <FlowPreview xml={xml} params={p} label="How this note runs" />
+            </>
+          )}
+          {hood && (
+            <div className="stack gap-6">
+              <span className="lbl">Payout per 100 at the end, if not repaid early</span>
+              <PayoffChart params={p} />
+            </div>
+          )}
+        </div>
+      </details>
       {built && (
         <details className="adv iw-save">
           <summary>Save as a ready-made note</summary>
