@@ -237,7 +237,8 @@ try {
       watched.some((w) => w.options?.address?.toLowerCase() === token.toLowerCase() && w.options.decimals === 6),
       `Add to wallet: wallet_watchAsset for the note token ${token} (6 decimals)`,
     );
-    // To an unverified wallet: refused in the app, and by the engine itself.
+    // To an unverified wallet: refused in the app, and by the engine itself. The transfer form is folded away.
+    await page.locator('summary', { hasText: 'Transfer units' }).click();
     await page.locator('#x-to').fill(acct(5).address);
     await page.locator('#x-units').fill('10');
     await page.getByRole('button', { name: 'Transfer', exact: true }).click();
