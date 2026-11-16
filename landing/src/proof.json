@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-28T07:56:52.800Z",
+  "generatedAt": "2026-11-16T11:29:45.155Z",
   "deployments": [
     {
       "key": "robinhood-testnet",
@@ -18,6 +18,20 @@
         "AMD": "0x71178BAc73cBeb415514eB542a8995b82669778d",
         "PLTR": "0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0",
         "NFLX": "0x3b8262A63d25f0477c4DDE23F83cfe22Cb768C93"
+      }
+    },
+    {
+      "key": "base-sepolia",
+      "name": "Base Sepolia",
+      "explorer": "https://sepolia.basescan.org",
+      "deployed": true,
+      "engine": "0x37184A9D436B9e8F2225cAFd5474E60A5d18FDEb",
+      "lens": "0xF486dfaa1111Dd20B931b304Ec7d0B967463a086",
+      "forwarder": "0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5",
+      "block": 55679693,
+      "tokens": {
+        "USDC": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        "WETH": "0x4200000000000000000000000000000000000006"
       }
     }
   ],

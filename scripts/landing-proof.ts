@@ -10,6 +10,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { CHAIN_TOKENS, type NoteChain } from '../packages/core/src/products/params';
+import { isDeployedAddress } from '../packages/core/src/products/base-stocks';
 
 const CHAINS = [
   {
@@ -47,9 +48,12 @@ const deployments = CHAINS.map((c) => {
     tokens?: Record<string, string>;
   };
   if (!d.engine) return { ...c, deployed: false as const };
-  // The real tokens notes use on the chain (notes.markets' own test tokens are retired and not shown).
+  // The real tokens notes use on the chain (notes.markets' own test tokens are retired and not shown), leaving out a
+  // token not deployed yet (a B20 stand-in at the zero placeholder).
   const tokens = Object.fromEntries(
-    Object.values(CHAIN_TOKENS[c.key as NoteChain] ?? {}).map((t) => [t.token, t.address]),
+    Object.values(CHAIN_TOKENS[c.key as NoteChain] ?? {})
+      .filter((t) => isDeployedAddress(t.address))
+      .map((t) => [t.token, t.address]),
   );
   return {
     ...c,
