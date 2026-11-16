@@ -15,9 +15,20 @@ import {
   walletConnectWallet,
 } from '@rainbow-me/rainbowkit/wallets';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createPublicClient, defineChain, http, type Chain, type PublicClient, type WalletClient } from 'viem';
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  defineChain,
+  http,
+  type Chain,
+  type Hex,
+  type PublicClient,
+  type WalletClient,
+} from 'viem';
 import { createConfig, deserialize, WagmiProvider, useAccount, type State } from 'wagmi';
 import { getAccount, getWalletClient, switchChain } from 'wagmi/actions';
+import { builderSuffixFor } from './builderCode';
 import { EvmAdapter, type EngineVersion } from '@sn/sdk';
 import { CASH_TOKENS, cashTokenOf, EXTERNAL_TOKENS, HOME_CHAIN, isNoteChain, TEST_CASH_TOKEN } from '@sn/core';
 import type { AppConfig, ChainConfig } from './api';
@@ -269,6 +280,20 @@ export function useAddress(): string | null {
   return address ? address.toLowerCase() : null;
 }
 
+/**
+ * `w`, sending every transaction with `suffix` appended to its calldata (the Base builder code); `w` itself when
+ * there is no suffix. A client's actions are bound when it is built, so this builds a new one over the same wallet.
+ */
+export function withBuilderCode(w: WalletClient, suffix: Hex | undefined): WalletClient {
+  if (!suffix) return w;
+  return createWalletClient({
+    account: w.account,
+    chain: w.chain,
+    transport: custom({ request: w.request as never }),
+    dataSuffix: suffix,
+  }) as WalletClient;
+}
+
 /** A WalletClient on `chainKey`, switching the wallet's network first when needed. */
 export function useSigner() {
   const { wagmi, byKey } = useChains();
@@ -279,7 +304,8 @@ export function useSigner() {
       const acct = getAccount(wagmi);
       if (!acct.address) throw new Error('Connect a wallet first.');
       if (acct.chainId !== target.chain.id) await switchChain(wagmi, { chainId: target.chain.id });
-      return (await getWalletClient(wagmi, { chainId: target.chain.id })) as WalletClient;
+      const w = (await getWalletClient(wagmi, { chainId: target.chain.id })) as WalletClient;
+      return withBuilderCode(w, builderSuffixFor(target.chain.id));
     },
     [wagmi, byKey],
   );

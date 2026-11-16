@@ -18,6 +18,10 @@ to Robinhood Chain (EVM), with the same Flow-like design.
   transfer, withdraw, and waiting tasks. The wallet is switched to the note's network first.
 - **Wallets** are injected browser wallets (MetaMask, Rabby, Coinbase Wallet…), found with EIP-6963 and shown
   through RainbowKit. Set `VITE_WC_PROJECT_ID` to add WalletConnect for mobile wallets.
+- **Base builder code:** set `VITE_BUILDER_CODE` at build time to the code from dashboard.base.org (Settings →
+  Project Settings → Builder Code, like `bc_b7k3p9da`). Every transaction a wallet sends from the app on Base or
+  Base Sepolia then ends with the code's ERC-8021 suffix (`src/lib/builderCode.ts`), which Base reads to attribute
+  the activity; contracts ignore it. Unset, nothing is appended. Robinhood Chain transactions never carry it.
 - **Network** comes from the API's `/api/config`: Robinhood Chain testnet (or a local fork of it), where every note
   runs. With no chain configured yet (before the contracts are deployed) the app shows a short notice instead.
 - **Agent badge:** each note shows who submitted its price reports, Chainlink CRE (via the KeystoneForwarder) or
