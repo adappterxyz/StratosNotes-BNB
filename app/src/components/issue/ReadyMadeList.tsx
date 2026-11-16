@@ -79,6 +79,11 @@ function Card({
         <span>{rate.sub}</span>
       </div>
       <BarrierBar p={params} say={false} legend={false} />
+      {r.description && (
+        <p className="tpl-desc" data-desc>
+          {r.description}
+        </p>
+      )}
       {changes.length > 0 && (
         <p className="tpl-moved" data-moved>
           Written for {NOTE_CHAIN_SHORT[noteChainOf(r.params)]}: on {where} it {changes.join(' and ')}.

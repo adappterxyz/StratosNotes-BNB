@@ -155,9 +155,17 @@ try {
   // 1. Issue two notes as the issuer.
   await page.goto(APP);
   await page.getByRole('group', { name: 'Test account' }).waitFor();
-  const connect = page.getByRole('button', { name: 'Connect Wallet' }).first();
-  if (await connect.isVisible().catch(() => false)) {
-    await connect.click();
+  // The test wallet is always authorized, so the app reconnects to it by itself a moment after loading: wait for
+  // that, and connect by hand only if it has not happened (clicking Connect in that moment opens a dialog that the
+  // reconnect then closes under the click).
+  const account = page.getByRole('button', { name: /0x[0-9a-fA-F]{2}/ }).first();
+  if (
+    !(await account
+      .waitFor({ timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false))
+  ) {
+    await page.getByRole('button', { name: 'Connect Wallet' }).first().click();
     await page.getByText('StratosNotes test wallet').click();
   }
   await page.getByRole('button', { name: /^Test USDC$/ }).waitFor({ timeout: 30_000 });

@@ -30,6 +30,29 @@ type Tab = 'wallet' | 'subscribed' | 'issued' | 'collateral' | 'paid' | 'claim';
 const symsOf = (o: NoteView) =>
   o.unds.length ? o.unds.map((u) => u.symbol) : o.params.underlyings.map((u) => u.symbol);
 
+/**
+ * What a note holds for this wallet besides cash: its share of the collateral after a default, or tokens delivered
+ * at the end. Named from the note's collateral lines (asset number -> symbol); withdrawn on the note page.
+ */
+export function heldTokens(
+  p: { view: NoteView; position: { holdings: Array<{ asset: number; balance: string }> } },
+  cash: string,
+): Array<{ asset: number; label: string; amount: number; collateral: boolean }> {
+  return p.position.holdings
+    .filter((h) => h.asset > CASH_ASSET && BigInt(h.balance) > 0n)
+    .map((h) => {
+      const line = p.view.economics?.collateral.find((c) => c.asset === h.asset);
+      return {
+        asset: h.asset,
+        label: line ? (line.symbol === 'USD' ? cash : line.symbol) : 'delivered token',
+        amount: Number(BigInt(h.balance)) / 1e10,
+        collateral: !!line,
+      };
+    });
+}
+const fmtHeld = (t: { label: string; amount: number }) =>
+  `${t.amount.toLocaleString(undefined, { maximumFractionDigits: t.amount < 1 ? 6 : 2 })} ${t.label}`;
+
 export default function Portfolio() {
   const connected = useAddress();
   const [params] = useSearchParams();
@@ -316,6 +339,7 @@ export default function Portfolio() {
               const st = statusOf(p.view, sym);
               const done = st.key !== 'open' && st.key !== 'running';
               const claimable = cashOf(p);
+              const held = heldTokens(p, sym);
               return (
                 <div key={p.id} {...rowProps(p.id, p.view.name)} className="card pf-card link" data-note={p.id}>
                   <div className="pf-card-top">
@@ -353,6 +377,20 @@ export default function Portfolio() {
                       <dd className="small">{done ? 'Finished' : nextEvent(p.view)}</dd>
                     </div>
                   </dl>
+                  {held.length > 0 && (
+                    <p className="pf-held small" data-held>
+                      <b>
+                        {held.every((t) => t.collateral)
+                          ? 'Collateral for you'
+                          : held.some((t) => t.collateral)
+                            ? 'Collateral and tokens for you'
+                            : 'Delivered to you'}
+                        :
+                      </b>{' '}
+                      <span className="num">{held.map(fmtHeld).join(' + ')}</span>
+                      <span className="muted"> · waiting in the note, withdraw it on the note page</span>
+                    </p>
+                  )}
                   {p.view.hasTerms && (
                     <BarrierBar p={p.view.params} marks={marksOf(p.view)} past={done} legend={false} />
                   )}
@@ -565,9 +603,7 @@ export default function Portfolio() {
                     <tbody>
                       {withdrawable.map((p) => {
                         const sym = cashSymbol(byKey[p.chain]?.cfg, p.view.cashToken);
-                        const tokens = p.position.holdings.filter(
-                          (h) => h.asset > CASH_ASSET && BigInt(h.balance) > 0n,
-                        );
+                        const tokens = heldTokens(p, sym);
                         const cash = cashOf(p);
                         const issuer = isIssuerOf(p);
                         return (
@@ -587,8 +623,9 @@ export default function Portfolio() {
                             </td>
                             <td className="small">
                               {tokens.length ? (
-                                <span className="muted">
-                                  {tokens.length} token{tokens.length > 1 ? 's' : ''}: withdraw on the note page
+                                <span>
+                                  <span className="num">{tokens.map(fmtHeld).join(' + ')}</span>
+                                  <span className="muted"> · withdraw on the note page</span>
                                 </span>
                               ) : (
                                 <span className="muted">—</span>

@@ -183,6 +183,19 @@ a.nc.tpl:hover {
   font-size: 13px;
   color: var(--slate);
 }
+/* The author's description, on the card (a tooltip alone is invisible on a phone): three lines, the rest on hover. */
+.tpl-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--slate);
+  text-align: left;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
 .tpl-moved {
   margin: 0;
   font-size: 12.5px;
@@ -584,4 +597,66 @@ a.nc.tpl:hover {
   white-space: normal;
   text-align: left;
   min-width: 0;
+}
+
+/* The live preview on a phone: a bar under the header that opens to the full card (components/issue/Preview.tsx). */
+.iw-side.iw-preview.iw-peek {
+  order: -1;
+  position: sticky;
+  top: calc(var(--appbar-h, 104px) + env(safe-area-inset-top, 0px));
+  z-index: 5;
+  gap: 10px;
+  background: hsl(var(--card));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 6px 18px -12px rgb(0 0 0 / 0.35);
+  max-height: calc(100dvh - var(--appbar-h, 104px) - 24px);
+  overflow-y: auto;
+}
+.iw-peek summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+}
+.iw-peek summary::-webkit-details-marker {
+  display: none;
+}
+.iw-peek-h {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dimc);
+}
+.iw-peek-rate {
+  flex: 1;
+  min-width: 0;
+  color: var(--slate);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iw-peek-rate b {
+  font-size: 17px;
+  color: hsl(var(--foreground));
+}
+.iw-peek-risk {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.iw-peek summary .i {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.15s;
+}
+.iw-peek[open] summary .i {
+  transform: rotate(180deg);
+}
+.iw-peek[open] summary {
+  margin-bottom: 10px;
 }

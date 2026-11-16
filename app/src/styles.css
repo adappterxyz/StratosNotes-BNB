@@ -3204,3 +3204,11 @@ svg.i.issue-ic {
 .seg.chain-filter {
   margin-bottom: 10px;
 }
+
+/* Portfolio: what a note holds for you besides cash (collateral after a default, delivered tokens). */
+.pf-held {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--inset);
+  border-radius: 8px;
+}

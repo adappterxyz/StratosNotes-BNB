@@ -232,7 +232,7 @@ export default function Marketplace() {
             </div>
           </div>
         ) : (
-          <NoNotes />
+          <NoNotes cash={nets[0]?.stablecoin.symbol ?? 'USDG'} />
         )
       ) : (
         <div className="nc-grid">
@@ -258,7 +258,7 @@ export default function Marketplace() {
 }
 
 /** No notes yet anywhere: play an example while the first one is issued. */
-function NoNotes() {
+function NoNotes({ cash }: { cash: string }) {
   return (
     <div className="stack">
       <div className="empty mk-empty">
@@ -270,7 +270,7 @@ function NoNotes() {
       </div>
       <PlayNote
         p={{ ...EXAMPLE_WORST_OF, underlyings: [FEEDS.TSLA, FEEDS.NVDA], observations: 3 }}
-        cash="USDG"
+        cash={cash}
         title="Play an example note"
       />
     </div>

@@ -25,7 +25,6 @@ import {
   parseBpmn,
   PRODUCT_LABELS,
   isRemoteCollateral,
-  type NoteChain,
   toChain,
   toIssuanceTerms,
   validateProductParams,
@@ -80,14 +79,17 @@ export default function IssueWizard() {
   // The network picked first (on the entry page, or carried along from step to step).
   const issuable = issueChains(config);
   const askedChain = search.get('chain');
-  const urlChain: NoteChain | null =
-    askedChain && isNoteChain(askedChain) && issuable.some((c) => c.key === askedChain)
+  // Any chain this deployment serves can be picked, also one that is not a note chain by name (a local fork is
+  // served as "local"): only the terms' move below needs a named note chain.
+  const urlChain: string | null =
+    askedChain && issuable.some((c) => c.key === askedChain)
       ? askedChain
-      : issuable.length === 1 && isNoteChain(issuable[0].key)
+      : issuable.length === 1
         ? issuable[0].key
         : null;
   /** Terms moved to the network picked first (kept as they are when none is picked). */
-  const onUrlChain = (q: ProductParams) => (urlChain && noteChainOf(q) !== urlChain ? toChain(q, urlChain) : q);
+  const onUrlChain = (q: ProductParams) =>
+    urlChain && isNoteChain(urlChain) && noteChainOf(q) !== urlChain ? toChain(q, urlChain) : q;
   // What can be filled in at once (a note type, a built-in, the AI's reading); a saved note loads in the effect below.
   const [init] = useState(() => {
     const hit = kind && ready && ready !== 'ai' ? readyMade(ready) : null;
