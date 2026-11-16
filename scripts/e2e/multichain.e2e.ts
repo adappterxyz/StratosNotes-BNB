@@ -36,7 +36,7 @@ function note(chain: 'robinhood-testnet' | 'base-sepolia', p: ProductParams, pid
   const c = compileTemplate({ product: p });
   const engine = FIXTURE[chain].engine;
   const state: NoteState = {
-    id: noteId(chain, engine, pid),
+    id: noteId(chain, engine, String(pid)),
     chain,
     engine,
     pid: String(pid),
@@ -60,11 +60,12 @@ const baseNote = note(
   'base-sepolia',
   {
     ...EXAMPLE_PRODUCTS['reverse-convertible'],
-    name: 'TSLA RC on Base, TSLA locked on Robinhood Chain',
+    name: 'TSLA RC on Base', // not the phrase the card must show: the card states where the collateral is locked
     chain: 'base-sepolia',
     underlyings: [FEEDS.TSLA],
     collateralChain: 'robinhood-testnet',
     collateral: [{ symbol: 'TSLA', haircutPct: 60 }],
+    collateralRatioPct: 150,
   },
   1,
 );
