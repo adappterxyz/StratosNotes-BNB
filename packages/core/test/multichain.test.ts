@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  B20_SYMBOLS,
   CASH_FAUCETS,
   CASH_TOKENS,
   cashTokenOf,
@@ -77,13 +78,13 @@ describe('two note chains: Robinhood Chain testnet and Base Sepolia', () => {
     expect(withChain(p, BASE).chain).toBe(BASE);
   });
 
-  it('issues a Base note in USDC, delivering WETH; stocks wait for the B20 stand-ins', () => {
+  it('issues a Base note in USDC, delivering WETH; stocks in the B20 stand-ins', () => {
     const p: ProductParams = { ...EXAMPLE_PRODUCTS.phoenix, chain: BASE, settlement: 'physical' };
     expect(validateProductParams(p)).toEqual([]);
     expect(cashOf(p)).toMatchObject({ name: 'USDC', token: 'USDC', decimals: 6 });
     expect(instantiateProduct(p).assets.find((a) => a.id === 'd_ETH')).toMatchObject({ token: 'WETH', decimals: 18 });
     expect(instantiateProduct(p).description).toContain('subscribe in USDC');
-    // TSLA is delivered in the TSLAc stand-in (shares / multiplier), once it is deployed; AMD has no token on Base.
+    // TSLA is delivered in the TSLAc stand-in (shares / multiplier); AMD has no token on Base.
     expect(deliverableToken({ chain: BASE }, 'TSLA')).toMatchObject({
       token: 'TSLAc',
       decimals: 8,
@@ -92,7 +93,7 @@ describe('two note chains: Robinhood Chain testnet and Base Sepolia', () => {
     expect(deliverableToken({ chain: BASE }, 'AMD')).toBeUndefined();
     const tsla: ProductParams = { ...EXAMPLE_PRODUCTS['reverse-convertible'], chain: BASE, underlyings: [FEEDS.TSLA] };
     expect(validateProductParams(tsla)).toEqual([]);
-    expect(validateProductParams({ ...tsla, settlement: 'physical' }).join(' ')).toMatch(/TSLAc is not deployed yet/);
+    expect(validateProductParams({ ...tsla, settlement: 'physical' })).toEqual([]);
     expect(validateProductParams({ ...tsla, underlyings: [FEEDS.AMD], settlement: 'physical' }).join(' ')).toMatch(
       /no AMD token to deliver on Base Sepolia/,
     );
@@ -111,13 +112,13 @@ describe('two note chains: Robinhood Chain testnet and Base Sepolia', () => {
       { symbol: 'AMZN', token: null },
       { symbol: 'AMD', token: null },
       { symbol: 'PLTR', token: null },
-      // The B20 stand-ins (TSLAc…) are pledgeable on Base once deployed.
-      { symbol: 'TSLAc', token: null },
-      { symbol: 'AMZNc', token: null },
-      { symbol: 'NVDAc', token: null },
-      { symbol: 'AAPLc', token: null },
-      { symbol: 'MSFTc', token: null },
-      { symbol: 'METAc', token: null },
+      // The B20 stand-ins (TSLAc…) are pledgeable on Base.
+      { symbol: 'TSLAc', token: 'TSLAc' },
+      { symbol: 'AMZNc', token: 'AMZNc' },
+      { symbol: 'NVDAc', token: 'NVDAc' },
+      { symbol: 'AAPLc', token: 'AAPLc' },
+      { symbol: 'MSFTc', token: 'MSFTc' },
+      { symbol: 'METAc', token: 'METAc' },
     ]);
     const p: ProductParams = {
       ...EXAMPLE_PRODUCTS.phoenix,
@@ -222,10 +223,10 @@ describe('moving terms between chains (the network picker)', () => {
       { symbol: 'USD', haircutPct: 100 },
     ],
   };
-  it('to Base: stock delivery settles in cash, stock collateral dropped (or locked on Robinhood Chain)', () => {
+  it('to Base: stock delivery in the B20 stand-in, stock collateral dropped (or locked on Robinhood Chain)', () => {
     const b = toChain(rhStock, BASE);
     expect(b.chain).toBe(BASE);
-    expect(b.settlement).toBe('cash');
+    expect(b.settlement).toBe('physical');
     expect(b.collateral).toEqual([{ symbol: 'USD', haircutPct: 100 }]);
     expect(validateProductParams(b)).toEqual([]);
     const locked = toChain({ ...rhStock, collateralChain: RH }, BASE);
@@ -297,6 +298,12 @@ describe('cross-chain deployment records', () => {
     expect(wirePlan(RH, BASE)).toEqual([
       { symbol: 'USDC.base', token: CHAIN_TOKENS[BASE].USDC.address, decimals: 6, valuedAs: 'USD' },
       { symbol: 'WETH.base', token: CHAIN_TOKENS[BASE].WETH.address, decimals: 18, valuedAs: 'ETH' },
+      ...B20_SYMBOLS.map((s) => ({
+        symbol: `${s}.base`,
+        token: CHAIN_TOKENS[BASE][s].address,
+        decimals: 8,
+        valuedAs: s,
+      })),
     ]);
     expect(() => wirePlan(RH, RH)).toThrow(/no cross-chain collateral/);
   });
@@ -325,7 +332,7 @@ describe('cross-chain deployment records', () => {
       'ethereum-testnet-sepolia-base-1',
     ]);
     const v = keeperVaults(xs, CRE_CHAIN_NAMES, { stateBlock: 'latest' });
-    expect(v).toHaveLength(2 + 6);
+    expect(v).toHaveLength(2 + 6 + B20_SYMBOLS.length);
     expect(v.find((w) => w.label === 'TSLA.rh')).toMatchObject({
       homeChain: 'ethereum-testnet-sepolia-base-1',
       assetChain: 'robinhood-testnet',

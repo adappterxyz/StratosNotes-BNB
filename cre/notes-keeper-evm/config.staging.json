@@ -113,6 +113,60 @@
       "token": "0x4200000000000000000000000000000000000006",
       "label": "WETH.base",
       "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0xe291901fA415f89375d32De2Ec88D78868e11025",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6",
+      "token": "0xA1d0c4af9036f16a92fb26C47502494d393E6aeb",
+      "label": "TSLAc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0x62483F43D1C5aa6e4dda397Aa1C83775C7f3FEc9",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6",
+      "token": "0xC30E1Aa84c2344E0C94A8872e11D630C81339c9B",
+      "label": "AMZNc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0xab130dadB6Bce7d06D8F5d2ee1F7649e9271265B",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6",
+      "token": "0xC22886C920E9B51A0F16e11C90B155921E955C9D",
+      "label": "NVDAc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0x1f4778Fc18eB8331b637cbeA38b46287108eE9EB",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6",
+      "token": "0xAd47c568D3e058292f6b0CC130385034C65C5758",
+      "label": "AAPLc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0x275a345BE9a7c15D081fa5966D762f22b1d070d2",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6",
+      "token": "0x3c4c95F15F7F6E877bbC8D84f57cE48571a001F1",
+      "label": "MSFTc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0x3D98509a392A99c9E93c67a4DA692b3192Cf9f76",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6",
+      "token": "0x5DBB2f20834236926Fe7826156b39a4a86A7d6A5",
+      "label": "METAc.base",
+      "stateBlock": "latest"
     }
   ],
   "finalityAllowanceSec": 1800,

@@ -39,7 +39,11 @@ describe('cross-chain pairs, both directions', () => {
     expect(toBase.asset.key).toBe(BASE);
     expect(toBase.gateway).toBe(FIXTURE[RH].gateway);
     expect(toBase.vault).toBe(FIXTURE[BASE].vault);
-    expect(Object.keys(toBase.receipts)).toEqual(['USDC.base', 'WETH.base']);
+    expect(Object.keys(toBase.receipts)).toEqual([
+      'USDC.base',
+      'WETH.base',
+      ...['TSLAc', 'AMZNc', 'NVDAc', 'AAPLc', 'MSFTc', 'METAc'].map((s) => `${s}.base`),
+    ]);
     const toRh = crossChainLeg(config, BASE)!;
     expect(toRh.asset.key).toBe(RH);
     expect(Object.keys(toRh.receipts)).toEqual(['USDG.rh', 'WETH.rh', 'TSLA.rh', 'AMZN.rh', 'AMD.rh', 'PLTR.rh']);

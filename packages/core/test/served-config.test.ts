@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHAIN_TOKENS, wirePlan, XC_CHAINS, type CrossChainDeployment, type NoteChain } from '../src';
+import { B20_SYMBOLS, CHAIN_TOKENS, wirePlan, XC_CHAINS, type CrossChainDeployment, type NoteChain } from '../src';
 import {
   creGateways,
   creNameOf,
@@ -68,7 +68,7 @@ describe('served config: both note chains', () => {
   it('serves USDG on Robinhood Chain and USDC on Base, with each chain real tokens', () => {
     expect(servedStablecoin(RH)).toEqual({ symbol: 'USDG', address: CHAIN_TOKENS[RH].USDG.address, decimals: 6 });
     expect(servedStablecoin(BASE)).toEqual({ symbol: 'USDC', address: CHAIN_TOKENS[BASE].USDC.address, decimals: 6 });
-    expect(Object.keys(realTokens(BASE)).sort()).toEqual(['USDC', 'WETH']);
+    expect(Object.keys(realTokens(BASE)).sort()).toEqual(['USDC', 'WETH', ...B20_SYMBOLS].sort());
     expect(realTokens('local')).toEqual({});
   });
 });
@@ -95,7 +95,9 @@ describe('served config: cross-chain pairs, both directions', () => {
     expect(receiptsOn(xs, BASE)['TSLA.rh']).toBe(baseHome.remotes[0].receipts['TSLA.rh'].receipt);
     const r = servedCrossChain(xs, RH)!;
     expect(r.remotes[0].chain).toBe(BASE);
-    expect(Object.keys(receiptsOn(xs, RH)).sort()).toEqual(['USDC.base', 'WETH.base']);
+    expect(Object.keys(receiptsOn(xs, RH)).sort()).toEqual(
+      ['USDC.base', 'WETH.base', ...B20_SYMBOLS.map((s) => `${s}.base`)].sort(),
+    );
     expect(servedCrossChain(xs, 'local')).toBeNull();
     expect(receiptsOn([], RH)).toEqual({});
   });
@@ -138,7 +140,7 @@ describe('served config: cross-chain pairs, both directions', () => {
     // A v1 gateway (no queue) is never flushed.
     expect(creGateways([{ ...rhHome, home: { ...rhHome.home, version: 1 } }])).toEqual([]);
     const v = creVaults(xs);
-    expect(v).toHaveLength(8);
+    expect(v).toHaveLength(8 + B20_SYMBOLS.length);
     expect(v.every((w) => w.stateBlock === 'latest')).toBe(true);
     expect(v.filter((w) => w.homeChain === 'ethereum-testnet-sepolia-base-1').map((w) => w.assetChain)).toEqual(
       Array(6).fill('robinhood-testnet'),

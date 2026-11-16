@@ -1,6 +1,7 @@
 # Stocks on Base: B20 stand-ins on Base Sepolia
 
-**Status: built and tested; not deployed.** Coinbase launched tokenized US stocks on **Base mainnet** on 2026-08-24
+**Status: deployed on Base Sepolia on 2026-11-16** (record: `deployments/base-stocks/base-sepolia.json`; faucet
+`0x5724c3362795733F7906826Bfaa71b758A13eeB3`), and added to the Robinhood-home / Base-vault pair. Coinbase launched tokenized US stocks on **Base mainnet** on 2026-08-24
 (the **B20** standard, custodian Alpaca). There is **no Base Sepolia deployment**: Coinbase's onchain registry
 `0x3f3E8cf41cdd3b1D118c16471aB0113DfDDd5CaD` has code on Base mainnet and none on Base Sepolia (`eth_getCode`). So
 notes on Base Sepolia get **notes.markets' own test stand-ins**: one contract per Coinbase token, with the same symbol,
@@ -215,6 +216,5 @@ reverted, the served tokens on Base Sepolia became USDC, WETH and the six stand-
 
 ## Not done here
 
-- The Base Sepolia deployment itself (needs the deployer key and a go-ahead): nothing was broadcast to any network.
 - A claim button in the app (the faucet ABI and address are exported from core).
 - GOOGL and MSTR (verified feeds; one entry each in `B20_STOCKS`, and a redeploy of the stand-ins or a second record).

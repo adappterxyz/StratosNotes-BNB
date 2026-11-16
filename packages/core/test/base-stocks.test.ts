@@ -129,18 +129,21 @@ describe('Coinbase B20 stocks on Base: notes.markets stand-ins on Base Sepolia',
     expect(r.perUnit.deliver.TSLA).toBeCloseTo(1 / 250 / 1.25, 12);
   });
 
-  it('is not offered, served or wired before the stand-ins are deployed', () => {
-    for (const s of B20_SYMBOLS) expect(EXTERNAL_TOKENS[BASE][s]).toBeUndefined();
-    expect(undeployedTokensOf(baseTsla)).toEqual(['TSLAc']);
-    expect(validateProductParams(baseTsla).join(' ')).toMatch(/TSLAc is not deployed yet/);
-    // The network picker settles it in cash and drops the collateral it cannot pledge yet.
+  it('is offered, served and wired now the stand-ins are deployed on Base Sepolia', () => {
+    for (const s of B20_SYMBOLS) expect(EXTERNAL_TOKENS[BASE][s]).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(undeployedTokensOf(baseTsla)).toEqual([]);
+    expect(validateProductParams(baseTsla)).toEqual([]);
+    // The network picker keeps physical delivery in TSLAc on Base.
     const moved = toChain({ ...baseTsla, chain: undefined }, BASE);
-    expect(moved.settlement).toBe('cash');
-    expect(moved.collateral).toEqual([{ symbol: 'USD', haircutPct: 100 }]);
-    // The Robinhood-home / Base-vault pair: the stand-ins wait in pendingPlan, the live plan is unchanged.
-    expect(wirePlan(RH, BASE).map((w) => w.symbol)).toEqual(['USDC.base', 'WETH.base']);
-    expect(pendingPlan(RH, BASE).map((w) => w.symbol)).toEqual(B20_SYMBOLS.map((s) => `${s}.base`));
-    expect(STOCK_TOKEN_FAUCETS[BASE]).toBeUndefined();
+    expect(moved.settlement).toBe('physical');
+    // The Robinhood-home / Base-vault pair: the stand-ins are wired, nothing pending.
+    expect(wirePlan(RH, BASE).map((w) => w.symbol)).toEqual([
+      'USDC.base',
+      'WETH.base',
+      ...B20_SYMBOLS.map((s) => `${s}.base`),
+    ]);
+    expect(pendingPlan(RH, BASE)).toEqual([]);
+    expect(STOCK_TOKEN_FAUCETS[BASE]).toMatch(/^https:\/\/sepolia\.basescan\.org\/address\/0x/);
   });
 
   it('lets a Robinhood Chain note lock a Base stock on Base, valued with the per-token feed', () => {
@@ -152,6 +155,6 @@ describe('Coinbase B20 stocks on Base: notes.markets stand-ins on Base Sepolia',
     expect(collateralTokenOf(p, 'NVDAc')).toEqual({ token: 'NVDAc.base', decimals: 8 });
     expect(RECEIPTS['NVDAc.base']).toMatchObject({ home: RH, asset: BASE, symbol: 'NVDAc' });
     expect(instantiateProduct(p).bpmnXml).toContain(B20_STOCKS.NVDAc.feed);
-    expect(validateProductParams(p).join(' ')).toMatch(/NVDAc is not deployed yet/);
+    expect(validateProductParams(p)).toEqual([]);
   });
 });
