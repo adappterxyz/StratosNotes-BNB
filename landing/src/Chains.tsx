@@ -3,17 +3,15 @@
  *  - ChainFlow: an animated four-step diagram of cross-chain collateral (lock, message, count, release) for one
  *    example route per collateral chain. It advances on its own while on screen; hover, focus or a click on a step
  *    holds it. With reduced motion it never advances by itself and nothing travels.
- *  - A condensed version of /support's first table, read from packages/core like the page itself.
+ *  - One card per chain (mark, cash token, its stock tokens), read from packages/core like /support.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
   CHAIN_CASH,
-  CHAIN_TOKENS,
   NOTE_CHAINS,
   NOTE_CHAIN_SHORT,
   REMOTE_COLLATERAL,
   collateralChoices,
-  remoteCollateralChains,
   type CollateralSymbol,
   type NoteChain,
 } from '../../packages/core/src/products/params';
@@ -60,16 +58,10 @@ function ChainFlow() {
   const home = NOTE_CHAIN_SHORT[r.home];
 
   const steps: Array<[string, string]> = [
-    ['Lock', `The issuer locks ${token} in a vault on ${on}. It never leaves ${on}.`],
-    ['Message', `Chainlink CCIP tells the note on ${home} about the lock. This takes about 20 minutes.`],
-    [
-      'Count',
-      `The note holds a receipt, ${receipt}, priced by Chainlink and counted toward its collateral. Chainlink CRE checks on every run that the vault still holds the ${token}.`,
-    ],
-    [
-      'Release',
-      `Paid in full: CCIP carries the release back and the vault returns the ${token} to the issuer. On a default it goes to the holders instead, up to its value.`,
-    ],
+    ['Lock', `${token} goes into a vault on ${on}.`],
+    ['Message', 'Chainlink CCIP tells the note. About 20 minutes.'],
+    ['Count', `The note counts ${receipt} as collateral.`],
+    ['Release', 'Back to the issuer. Or to holders, on a default.'],
   ];
 
   return (
@@ -96,7 +88,7 @@ function ChainFlow() {
                 setStep(0);
               }}
             >
-              {t} on {NOTE_CHAIN_SHORT[x.asset]} → note on {NOTE_CHAIN_SHORT[x.home]}
+              {t} · {NOTE_CHAIN_SHORT[x.asset]} → {NOTE_CHAIN_SHORT[x.home]}
             </button>
           );
         })}
@@ -138,6 +130,8 @@ function ChainFlow() {
         {steps.map(([k, t], i) => (
           <li key={k} className={i === step ? 'on' : ''}>
             <button type="button" aria-current={i === step ? 'step' : undefined} onClick={() => setStep(i)}>
+              {/* The bar fills over the step's time on screen, then the next step takes over. */}
+              <i key={`${route}:${step}`} className={`flow-bar${held || reduced ? ' still' : ''}`} />
               <span className="flow-n">{String(i + 1).padStart(2, '0')}</span>
               <b>{k}</b>
               <span className="flow-t">{t}</span>
@@ -155,55 +149,49 @@ const stocksOn = (c: NoteChain) =>
     .filter((x) => x.token && x.symbol !== 'USD' && x.symbol !== 'ETH')
     .map((x) => x.token as string);
 
+/** Each chain's mark for a dark ground. BNB Chain's official logo carries its own name. */
+const MARK: Record<NoteChain, { src: string; h: number; named?: boolean }> = {
+  'robinhood-testnet': { src: '/logos/robinhood-chain.svg', h: 26 },
+  'base-sepolia': { src: '/logos/base-white.svg', h: 20 },
+  'bnb-testnet': { src: '/logos/bnb-chain.svg', h: 20, named: true },
+};
+
 export default function Chains() {
   return (
-    <section id="chains">
+    <section id="chains" className="chains-band">
       <div className="wrap">
         <div className="section-head" data-reveal>
           <span className="eyebrow">Three chains, one engine</span>
-          <h2>Collateral stays where it lives. The note runs where you want it.</h2>
-          <p>
-            A note is issued, paid and settled on one chain: Robinhood Chain, Base or BNB Chain. Each has its own
-            tokenized stocks. Any of them can back a note on its own chain, or stay locked there and back a note on
-            another, with no bridge and no wrapped token.
-          </p>
+          <h2>
+            Collateral stays put.
+            <br />
+            The note runs anywhere.
+          </h2>
         </div>
 
         <ChainFlow />
 
-        <div className="chain-table" data-reveal>
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Notes run on</th>
-                <th scope="col">Paid in</th>
-                <th scope="col">Stock tokens there</th>
-                <th scope="col">Can also be backed by tokens on</th>
-              </tr>
-            </thead>
-            <tbody>
-              {NOTE_CHAINS.map((c) => (
-                <tr key={c}>
-                  <th scope="row">{NOTE_CHAIN_SHORT[c]}</th>
-                  <td data-h="Paid in">
-                    {CHAIN_CASH[c].token}
-                    <small>{CHAIN_TOKENS[c][CHAIN_CASH[c].token]?.issuer.replace(' (test token)', '')}</small>
-                  </td>
-                  <td data-h="Stock tokens">{stocksOn(c).join(', ')}</td>
-                  <td data-h="Also backed by tokens on">
-                    {remoteCollateralChains(c)
-                      .map((a) => NOTE_CHAIN_SHORT[a])
-                      .join(' and ')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="chain-cards">
+          {NOTE_CHAINS.map((c) => (
+            <div key={c} className="chain-card" data-reveal>
+              <div className="chain-name">
+                <img src={MARK[c].src} alt={MARK[c].named ? NOTE_CHAIN_SHORT[c] : ''} height={MARK[c].h} />
+                {!MARK[c].named && NOTE_CHAIN_SHORT[c]}
+              </div>
+              <span className="chain-cash">
+                Paid in <b>{CHAIN_CASH[c].token}</b>
+              </span>
+              <span className="chain-toks">
+                {stocksOn(c).map((t) => (
+                  <code key={t}>{t}</code>
+                ))}
+              </span>
+            </div>
+          ))}
         </div>
         <p className="chain-foot" data-reveal>
-          All three are testnets. The stock tokens on Base and BNB Chain, and nmUSD, are our own test copies of
-          Coinbase&apos;s and Binance&apos;s tokens.{' '}
-          <a href="/support">See everything supported: stablecoins, all 141 underlyings, every collateral token →</a>
+          Testnets. The stock tokens on Base and BNB Chain, and nmUSD, are our own test copies.{' '}
+          <a href="/support">Everything supported →</a>
         </p>
       </div>
     </section>

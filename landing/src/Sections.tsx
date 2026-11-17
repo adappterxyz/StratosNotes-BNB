@@ -33,11 +33,7 @@ export function WhyOnchain() {
             <br />
             Public-chain transparency.
           </h2>
-          <p>
-            Structured notes have paid defined coupons to private-bank clients for decades. The payoff was never the
-            problem. The plumbing was: unsecured issuer credit risk, opaque fixings, slow payments, high minimums. We
-            kept the payoff and rebuilt the plumbing. The market risk of the payoff stays with you.
-          </p>
+          <p>Same payoff, new plumbing. The market risk stays with you.</p>
         </div>
         <div className="why-table" data-reveal>
           <table>
@@ -244,11 +240,8 @@ export function Outcomes() {
     <div id="outcomes" className="oc-block">
       <div className="wrap">
         <div className="section-head oc-head" data-reveal>
-          <h3>Three ways a note can end, all set out in the terms on day one.</h3>
-          <p>
-            Illustrations of how the terms work, not forecasts. Every payment depends on the issuer funding it, or
-            failing that, on the collateral pledged.
-          </p>
+          <h3>Three endings. All written on day one.</h3>
+          <p>Illustrations, not forecasts.</p>
         </div>
         <div className="oc" data-reveal>
           <div className="side-tabs oc-tabs" role="tablist" aria-label="How a note can end">
@@ -303,30 +296,17 @@ export function Outcomes() {
 
 export function ForIssuers() {
   const cards = [
-    [
-      'Launch in minutes',
-      'Start from a template or design the payoff on a visual canvas. The term sheet writes itself.',
-    ],
-    [
-      'Fund against collateral',
-      'Pledge collateral, raise stablecoins, keep your market view. Stock tokens on one chain can back a note on another without leaving their own chain.',
-    ],
-    ['Automated operations', 'Chainlink CRE reads the fixings and runs each payment step on schedule, on every note.'],
-    [
-      'Onchain distribution',
-      'During testnet, any wallet with a verified email can subscribe on Robinhood Chain, Base or BNB Chain. You remain responsible for where and to whom you offer a note.',
-    ],
+    ['Launch in minutes', 'Pick a template. The term sheet writes itself.'],
+    ['Fund against collateral', 'Lock tokens, raise stablecoins, keep your view.'],
+    ['Automated operations', 'Chainlink runs every fixing and payment.'],
+    ['Onchain distribution', 'Any verified wallet can subscribe, on three chains.'],
   ];
   return (
     <section id="issuers">
       <div className="wrap">
         <div className="section-head" data-reveal>
           <span className="eyebrow">For issuers</span>
-          <h2>Raise funding against collateral you already hold.</h2>
-          <p>
-            Turn inventory into term funding, priced through the coupon you set. Subscriptions, fixings and payments run
-            onchain.
-          </p>
+          <h2>Raise against what you already hold.</h2>
           <div className="hero-cta">
             <a href={ISSUE_URL} className="btn btn-primary btn-lg">
               Issue a note
@@ -341,6 +321,9 @@ export function ForIssuers() {
             </div>
           ))}
         </div>
+        <p className="fine" data-reveal>
+          You remain responsible for where and to whom you offer a note.
+        </p>
       </div>
     </section>
   );

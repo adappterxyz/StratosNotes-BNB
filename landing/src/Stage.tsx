@@ -12,19 +12,19 @@ const APP_URL = '/app/';
 const ISSUE_URL = '/app/issue';
 
 export const BEAT_COPY: ReadonlyArray<{ k: string; t: string; n?: string }> = [
-  { k: 'Issue', t: 'The issuer pledges collateral into the note.' },
-  { k: 'Subscribe', t: 'Stablecoin in, note units out, in one transaction.' },
-  { k: 'Fix and observe', t: 'Chainlink fixes the strike, then prices every observation date.' },
-  { k: 'Pay', t: 'Once the issuer has funded it, each coupon is paid on its date, ready to claim.' },
+  { k: 'Issue', t: 'Collateral goes in. Locked.' },
+  { k: 'Subscribe', t: 'Cash in, notes out. One transaction.' },
+  { k: 'Observe', t: 'Chainlink sets the strike and checks every date.' },
+  { k: 'Pay', t: 'Coupons land on schedule.' },
   {
     k: 'Held to maturity',
-    t: 'If the price stays in range: every coupon, then principal back.',
-    n: 'Paid in full: CRE releases the collateral to the issuer.',
+    t: 'In range: every coupon, then principal back.',
+    n: 'The collateral returns to the issuer.',
   },
   {
     k: 'Barrier breached',
-    t: 'Below the knock-in, the loss follows the underlying.',
-    n: 'Holders are repaid final ÷ strike. If the issuer misses a payment, CRE triggers the default and the collateral goes to the holders, up to its value.',
+    t: 'Below the barrier: the loss follows the price.',
+    n: 'If the issuer misses a payment, the collateral goes to holders, up to its value.',
   },
 ];
 
@@ -38,24 +38,6 @@ function lowPowerDevice() {
 }
 
 const clamp = (v: number) => Math.min(1, Math.max(0, v));
-
-/** What the hero says to each audience: three points and two buttons. "Try a note" opens the explorer. */
-const HERO: Record<Side, { points: string[] }> = {
-  Investors: {
-    points: [
-      'Collateral locked onchain behind every note',
-      'Fixings and payments run by Chainlink, not by the issuer',
-      '141 underlyings: stocks, crypto, currencies, gold and silver',
-    ],
-  },
-  Issuers: {
-    points: [
-      'Lock collateral, set your terms, raise stablecoins in minutes',
-      'No calculation or paying agent to hire',
-      'Best Use of Chainlink CRE, TOKEN2049 (earlier build)',
-    ],
-  },
-};
 
 export default function Stage({ side, onSide, onTry }: { side: Side; onSide: (s: Side) => void; onTry: () => void }) {
   const [reduced] = useState(prefersReducedMotion);
@@ -175,19 +157,9 @@ export default function Stage({ side, onSide, onTry }: { side: Side; onSide: (s:
         <div className="stage-shade" aria-hidden="true" />
         <div ref={heroRef} className="stage-hero">
           <div className="wrap hero-inner">
-            <h1>Structured notes, issued and paid onchain.</h1>
-            <p className="sub">
-              A structured note pays a set coupon in exchange for taking a defined risk on a price, such as a stock or
-              ETH.<span className="sub-more"> Here the terms, the collateral and every payment are onchain.</span>
-            </p>
-            <SideTabs side={side} onChange={onSide} idPrefix="hero-tab" controls="hero-points" />
-            <ul id="hero-points" className="outcomes" role="tabpanel" aria-labelledby={`hero-tab-${side}`}>
-              {HERO[side].points.map((t) => (
-                <li key={t}>
-                  <b>{t}</b>
-                </li>
-              ))}
-            </ul>
+            <h1>Structured notes, onchain.</h1>
+            <p className="sub">A set coupon for a defined risk. Collateral locked, every payment run by Chainlink.</p>
+            <SideTabs side={side} onChange={onSide} idPrefix="hero-tab" />
             <div className="hero-cta">
               {side === 'Investors' ? (
                 <>

@@ -28,10 +28,10 @@ const collateralTokens = NOTE_CHAINS.reduce(
 const routes = NOTE_CHAINS.reduce((n, c) => n + remoteCollateralChains(c).length, 0);
 
 const STATIC: Array<[number, string]> = [
-  [NOTE_CHAINS.length, 'chains a note can run on'],
-  [FEED_CATALOGUE.length, 'Chainlink prices to write a note on'],
-  [collateralTokens, 'tokens accepted as collateral'],
-  [routes, 'cross-chain collateral routes, all live'],
+  [NOTE_CHAINS.length, 'chains'],
+  [FEED_CATALOGUE.length, 'underlyings'],
+  [collateralTokens, 'collateral tokens'],
+  [routes, 'cross-chain routes'],
 ];
 
 /** Counts up to `to` once, when first seen; shows the final value at once with reduced motion or no JS. */
@@ -99,8 +99,8 @@ export default function Numbers() {
       );
       const steps = rows.reduce((n, x) => n + (x.view?.reports?.cre ?? 0), 0);
       const out: Array<[number, string]> = [[rows.length, rows.length === 1 ? 'note issued' : 'notes issued']];
-      if (coupons) out.push([coupons, coupons === 1 ? 'payment made to holders' : 'payments made to holders']);
-      if (steps) out.push([steps, 'steps run by Chainlink CRE']);
+      if (coupons) out.push([coupons, coupons === 1 ? 'payment made' : 'payments made']);
+      if (steps) out.push([steps, 'steps run by Chainlink']);
       setLive(out);
     })().catch(() => undefined);
     return () => {

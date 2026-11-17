@@ -9,6 +9,7 @@ import { SideTabs, type Side } from './SideTabs';
 import Chains from './Chains';
 import Numbers from './Numbers';
 import PayoffRule from './PayoffRule';
+import Ticker from './Ticker';
 import { DEFAULT_START, type ExplorerStart } from './explorer/start';
 import { Wordmark } from './Wordmark';
 
@@ -104,8 +105,6 @@ export default function Landing() {
   const links = [
     ['#chains', 'Chains'],
     ['#notes', 'Notes'],
-    ['#why', 'Why onchain'],
-    ['#issuers', 'For issuers'],
     ['#faq', 'FAQ'],
     ['/support', 'Supported'],
   ];
@@ -116,12 +115,12 @@ export default function Landing() {
       <div className="wrap">
         <div className="section-head">
           <span className="eyebrow">What a note can do</span>
-          <h2>Pick the trade-off you want.</h2>
+          <h2>Pick your trade-off.</h2>
           <SideTabs side={side} onChange={setSide} idPrefix="tab" controls="notes-panel" />
           <p className="side-sub" aria-live="polite">
             {side === 'Investors'
-              ? 'Every note gives up some upside for something else: a coupon, a buffer, an early exit. Terms are set before you buy, and you can lose money.'
-              : 'Raise stablecoins against collateral you lock, and pay each coupon when it falls due.'}
+              ? 'Terms set before you buy. You can lose money.'
+              : 'Lock collateral. Raise stablecoins. Pay coupons as they fall due.'}
           </p>
         </div>
       </div>
@@ -133,17 +132,10 @@ export default function Landing() {
           <button type="button" className="btn btn-primary" onClick={() => openExplorer()}>
             Try a note yourself
           </button>
-          <span>Drag the price and watch what it pays. Example terms, not live prices.</span>
         </div>
       </div>
       <Outcomes />
-      <div className="wrap">
-        <p className="underlyings" data-reveal>
-          <span className="built-label">Underlyings</span>141 Chainlink prices: 87 crypto assets including BTC, ETH and
-          SOL · 34 US stocks and ETFs including TSLA, NVDA, AAPL, AMZN and SPY · 18 currencies · gold and silver.{' '}
-          <a href="/support">See the full list</a>
-        </p>
-      </div>
+      <Ticker />
     </section>
   );
   const live = (
@@ -154,11 +146,7 @@ export default function Landing() {
             <i />
             Live on testnet
           </span>
-          <h2>Every term on one sheet, before you subscribe.</h2>
-          <p>
-            Each note publishes its coupon, tenor, autocall level, knock-in barrier and the collateral pledged behind
-            it.
-          </p>
+          <h2>Every term on one sheet.</h2>
           <div className="hero-cta">
             <a href={APP_URL} className="btn btn-ghost">
               Browse live notes
