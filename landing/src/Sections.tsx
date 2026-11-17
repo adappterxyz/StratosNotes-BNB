@@ -1,5 +1,5 @@
 /**
- * The page sections after the scroll story: why onchain, the three endings, the shelf, how it works, for issuers and
+ * The page sections after the scroll story: why onchain, the three endings (inside the notes section), for issuers and
  * the FAQ. Built from the existing classes (.section-head, .cards3/.card, .steps, .side-tabs) plus a few of their own.
  */
 import { useRef, useState } from 'react';
@@ -241,15 +241,10 @@ export function Outcomes() {
   };
   const e = ENDINGS[i];
   return (
-    <section id="outcomes">
+    <div id="outcomes" className="oc-block">
       <div className="wrap">
-        <div className="section-head" data-reveal>
-          <span className="eyebrow">Defined outcomes</span>
-          <h2>
-            Three ways an autocallable can end.
-            <br />
-            All set out in the terms on day one.
-          </h2>
+        <div className="section-head oc-head" data-reveal>
+          <h3>Three ways a note can end, all set out in the terms on day one.</h3>
           <p>
             Illustrations of how the terms work, not forecasts. Every payment depends on the issuer funding it, or
             failing that, on the collateral pledged.
@@ -302,103 +297,7 @@ export function Outcomes() {
           <p className="oc-foot">Which ending applies is decided by Chainlink-reported prices. Not by the issuer.</p>
         </div>
       </div>
-    </section>
-  );
-}
-
-export function Shelf() {
-  const cards = [
-    {
-      label: 'FCN · Fixed coupon note',
-      t: 'Higher coupon, more risk',
-      p: 'A fixed coupon is due on every observation, whatever the underlying does. Principal is repaid in full unless the knock-in barrier is breached; below it, you take the loss.',
-      best: 'Built around: a flat or slightly rising market',
-    },
-    {
-      label: 'Autocallable',
-      t: 'Income with an exit',
-      p: 'Ends early when the underlying closes at or above its autocall level on an observation date, repaying principal and that coupon. If it never calls, the barrier still applies at maturity.',
-      best: 'Built around: a rising market over a short horizon',
-    },
-    {
-      label: 'Custom',
-      t: 'Your payoff, your terms',
-      p: 'Issuers set the barrier, coupon and observation schedule on reverse convertibles, phoenix, snowball, principal-protected and worst-of notes. The term sheet fills in as they build.',
-      best: 'Built around: the issuer’s own view and terms',
-    },
-  ];
-  return (
-    <section id="notes" className="shelf">
-      <div className="wrap">
-        <div className="section-head" data-reveal>
-          <span className="eyebrow">The shelf</span>
-          <h2>Pick the trade-off you want.</h2>
-          <p>
-            Every note gives up some upside in exchange for something else: a coupon, a buffer, an early exit. Read each
-            note's terms and risks before you decide.
-          </p>
-        </div>
-        <div className="cards3">
-          {cards.map((c) => (
-            <div key={c.label} className="card shelf-card" data-reveal>
-              <span className="tag">{c.label}</span>
-              <h3>{c.t}</h3>
-              <p>{c.p}</p>
-              <span className="best">{c.best}</span>
-            </div>
-          ))}
-        </div>
-        <p className="underlyings" data-reveal>
-          <span className="built-label">Underlyings</span>141 Chainlink prices: 87 crypto assets including BTC, ETH and
-          SOL · 34 US stocks and ETFs including TSLA, NVDA, AAPL, AMZN and SPY · 18 currencies · gold and silver. Stock
-          tokens on Robinhood Chain, Base and BNB Chain can be pledged as collateral or delivered at maturity.{' '}
-          <a href="/support">See the full list</a>
-        </p>
-      </div>
-    </section>
-  );
-}
-
-export function HowItWorks() {
-  const steps = [
-    [
-      'Issue',
-      'The issuer sets underlying, tenor, coupon and barriers, then pledges collateral into the note contract at the ratio shown on the note.',
-    ],
-    [
-      'Subscribe',
-      "Investors subscribe on the note's chain: USDG on Robinhood Chain, USDC on Base, nmUSD on BNB Chain. The note and its payments live there; its collateral sits in the note or stays locked on another chain.",
-    ],
-    [
-      'Fix and observe',
-      'Chainlink fixes the strike at launch, then reads the price on every observation date and checks each barrier.',
-    ],
-    [
-      'Pay',
-      'The issuer funds each coupon, autocall and redemption, and Chainlink CRE pays it into the note automatically on the payment date. Holders claim from their portfolio whenever they like, with a receipt per claim. If the issuer misses a payment, the pledged collateral pays holders instead, up to its value. Every holder sees the same fixings from the same public feed.',
-    ],
-  ];
-  return (
-    <section id="how">
-      <div className="wrap">
-        <div className="section-head" data-reveal>
-          <span className="eyebrow">How it works</span>
-          <h2>
-            No back office.
-            <br />
-            Just a contract and an oracle.
-          </h2>
-        </div>
-        <ol className="steps four" data-reveal>
-          {steps.map(([k, p]) => (
-            <li key={k}>
-              <h3>{k}</h3>
-              <p>{p}</p>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
+    </div>
   );
 }
 

@@ -6,24 +6,25 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { BEATS } from './scene/beats';
+import { SideTabs, type Side } from './SideTabs';
 
 const APP_URL = '/app/';
 const ISSUE_URL = '/app/issue';
 
 export const BEAT_COPY: ReadonlyArray<{ k: string; t: string; n?: string }> = [
   { k: 'Issue', t: 'The issuer pledges collateral into the note.' },
-  { k: 'Subscribe', t: 'USDG in, note units out, in one transaction on Robinhood Chain.' },
+  { k: 'Subscribe', t: 'Stablecoin in, note units out, in one transaction.' },
   { k: 'Fix and observe', t: 'Chainlink fixes the strike, then prices every observation date.' },
-  { k: 'Pay', t: 'When the issuer has funded it, each coupon is paid in USDG on its date, ready to claim.' },
+  { k: 'Pay', t: 'Once the issuer has funded it, each coupon is paid on its date, ready to claim.' },
   {
     k: 'Held to maturity',
-    t: 'If it stays in range: every coupon, then principal back in USDG.',
+    t: 'If the price stays in range: every coupon, then principal back.',
     n: 'Paid in full: CRE releases the collateral to the issuer.',
   },
   {
     k: 'Barrier breached',
-    t: 'Below the knock-in, holders are repaid final ÷ strike in USDG: the loss follows TSLA.',
-    n: 'Missed payment: CRE triggers the default and the collateral in the note, TSLA included, goes to the holders, up to its value.',
+    t: 'Below the knock-in, the loss follows the underlying.',
+    n: 'Holders are repaid final ÷ strike. If the issuer misses a payment, CRE triggers the default and the collateral goes to the holders, up to its value.',
   },
 ];
 
@@ -38,7 +39,25 @@ function lowPowerDevice() {
 
 const clamp = (v: number) => Math.min(1, Math.max(0, v));
 
-export default function Stage() {
+/** What the hero says to each audience: three points and two buttons. "Try a note" opens the explorer. */
+const HERO: Record<Side, { points: string[] }> = {
+  Investors: {
+    points: [
+      'Collateral locked onchain behind every note',
+      'Fixings and payments run by Chainlink, not by the issuer',
+      '141 underlyings: stocks, crypto, currencies, gold and silver',
+    ],
+  },
+  Issuers: {
+    points: [
+      'Lock collateral, set your terms, raise stablecoins in minutes',
+      'No calculation or paying agent to hire',
+      'Best Use of Chainlink CRE, TOKEN2049 (earlier build)',
+    ],
+  },
+};
+
+export default function Stage({ side, onSide, onTry }: { side: Side; onSide: (s: Side) => void; onTry: () => void }) {
   const [reduced] = useState(prefersReducedMotion);
   const stageRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -156,33 +175,39 @@ export default function Stage() {
         <div className="stage-shade" aria-hidden="true" />
         <div ref={heroRef} className="stage-hero">
           <div className="wrap hero-inner">
-            <span className="badge">
-              <i />
-              Structured notes · Robinhood Chain · Base · BNB Chain
-            </span>
-            <h1>A bespoke instrument for every market.</h1>
+            <h1>Structured notes, issued and paid onchain.</h1>
             <p className="sub">
-              On-chain structured notes, live in minutes. Collateralize, mint, raise stablecoins, and let Chainlink
-              oracles and automation handle every fixing and coupon.
+              A structured note pays a set coupon in exchange for taking a defined risk on a price, such as a stock or
+              ETH.<span className="sub-more"> Here the terms, the collateral and every payment are onchain.</span>
             </p>
-            <ul className="outcomes" aria-label="For issuers">
-              <li>
-                <b>141 Chainlink underlyings</b>
-              </li>
-              <li>
-                <b>No calculation or paying agent to hire</b>
-              </li>
-              <li>
-                <b>Best Use of Chainlink CRE, TOKEN2049 (earlier build)</b>
-              </li>
+            <SideTabs side={side} onChange={onSide} idPrefix="hero-tab" controls="hero-points" />
+            <ul id="hero-points" className="outcomes" role="tabpanel" aria-labelledby={`hero-tab-${side}`}>
+              {HERO[side].points.map((t) => (
+                <li key={t}>
+                  <b>{t}</b>
+                </li>
+              ))}
             </ul>
             <div className="hero-cta">
-              <a href={ISSUE_URL} className="btn btn-primary btn-lg">
-                Issue a note
-              </a>
-              <a href={APP_URL} className="btn btn-ghost btn-lg">
-                Browse live notes
-              </a>
+              {side === 'Investors' ? (
+                <>
+                  <a href={APP_URL} className="btn btn-primary btn-lg">
+                    Browse live notes
+                  </a>
+                  <button type="button" className="btn btn-ghost btn-lg" onClick={onTry}>
+                    Try a note
+                  </button>
+                </>
+              ) : (
+                <>
+                  <a href={ISSUE_URL} className="btn btn-primary btn-lg">
+                    Issue a note
+                  </a>
+                  <a href={APP_URL} className="btn btn-ghost btn-lg">
+                    Browse live notes
+                  </a>
+                </>
+              )}
             </div>
             <div className="built-on">
               <span className="built-label">Built on</span>
@@ -191,7 +216,7 @@ export default function Stage() {
                 Robinhood Chain
               </span>
               <span className="built-mark">
-                <img src="/logos/base.svg" alt="" height={20} />
+                <img src="/logos/base.svg" alt="" height={18} />
                 Base
               </span>
               <span className="built-mark">

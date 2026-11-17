@@ -2067,3 +2067,653 @@ header.nav.open {
 .card-logo.chain-logos {
   gap: 14px;
 }
+
+/* ============================================================
+   2026-11 pass: a shorter scroll story, one audience switch, the chains section with its cross-chain diagram,
+   the numbers band and the payoff line as the page's signature.
+   ============================================================ */
+
+/* The story is six beats in about two and a half screens of scroll (was more than five). */
+.stage {
+  height: 350vh;
+}
+.stage-anchor {
+  top: 48vh;
+}
+@media (max-width: 760px) {
+  .stage {
+    height: 330vh;
+  }
+}
+/* Captions sit on their own white veil, so nothing in the scene runs through the words. */
+.beat {
+  padding: 22px 28px 22px 0;
+}
+.beat::before {
+  content: '';
+  position: absolute;
+  inset: -40px -90px -60px -60px;
+  z-index: -1;
+  background: radial-gradient(
+    ellipse at 30% 55%,
+    rgba(255, 255, 255, 0.97) 0%,
+    rgba(255, 255, 255, 0.9) 48%,
+    rgba(255, 255, 255, 0) 74%
+  );
+  pointer-events: none;
+}
+.beat-n {
+  max-width: 52ch;
+}
+
+/* Hero: the headline says what it is; the tabs pick who is reading. */
+.stage-hero h1 {
+  font-size: clamp(38px, 5.2vw, 76px);
+  max-width: 11ch;
+}
+.stage-hero .sub {
+  max-width: 44ch;
+}
+.stage-hero .side-tabs {
+  background: rgba(255, 255, 255, 0.92);
+}
+.stage-hero .side-tabs button {
+  min-height: 40px;
+  font-size: 15px;
+  padding: 0 18px;
+}
+.stage-hero .outcomes {
+  min-height: 84px;
+  align-content: start;
+}
+@media (max-width: 760px) and (max-height: 760px) {
+  .stage-hero h1 {
+    font-size: clamp(28px, 8.4vw, 36px);
+  }
+  .stage-hero .built-on {
+    display: none;
+  }
+}
+@media (max-height: 800px) and (min-width: 761px) {
+  .stage-hero h1 {
+    font-size: clamp(36px, 4.4vw, 60px);
+  }
+  .hero-inner {
+    gap: 14px;
+  }
+}
+/* Partner marks in one ink: quieter than the product's own green. */
+.built-mark {
+  min-height: 40px;
+  font-size: 14.5px;
+}
+
+/* The eyebrow carries the payoff line from the mark: floor, participation, cap. */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.eyebrow::before {
+  content: '';
+  width: 22px;
+  height: 12px;
+  flex: none;
+  background: var(--signal);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 12'%3E%3Cpolyline points='1.5,10 7,10 13,2 20.5,2' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 12'%3E%3Cpolyline points='1.5,10 7,10 13,2 20.5,2' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* The payoff rule: a hairline between sections that steps up once, the step in Signal. */
+.payoff-rule {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding-inline: clamp(16px, 4vw, 32px);
+}
+.payoff-rule svg {
+  display: block;
+  width: 100%;
+  height: 28px;
+  overflow: visible;
+}
+.payoff-rule path {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.payoff-rule .pr-rise {
+  stroke: var(--signal);
+  stroke-width: 2.5;
+}
+.sn-root.js .payoff-rule[data-reveal] {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sn-root.js .payoff-rule[data-reveal] path {
+    stroke-dashoffset: 1;
+  }
+  .sn-root.js .payoff-rule[data-reveal].in path {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 0.7s ease;
+  }
+  .sn-root.js .payoff-rule[data-reveal].in .pr-rise {
+    transition-delay: 0.55s;
+    transition-duration: 0.3s;
+  }
+  .sn-root.js .payoff-rule[data-reveal].in .pr-cap {
+    transition-delay: 0.8s;
+  }
+}
+
+/* ---- Numbers band ---- */
+.sn-root .numbers {
+  padding-block: clamp(28px, 4vw, 44px);
+  border-block: 1px solid var(--border);
+  background: var(--paper);
+}
+.num-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px clamp(16px, 3vw, 40px);
+  margin: 0;
+}
+.num-row > div {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+.num-row dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(34px, 4.4vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.num-row dt {
+  color: var(--text-soft);
+  font-size: 15px;
+  max-width: 22ch;
+}
+.num-row.live {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  align-items: center;
+}
+.num-row.live dd {
+  font-size: clamp(24px, 2.6vw, 32px);
+  color: var(--signal-ink);
+}
+.num-live-k {
+  justify-items: start;
+}
+@media (max-width: 760px) {
+  .num-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .num-live-k {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---- Chains: the cross-chain diagram ---- */
+.flow-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  padding: clamp(16px, 2.6vw, 28px);
+  display: grid;
+  gap: clamp(16px, 2.4vw, 24px);
+}
+.flow-routes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.flow-routes button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: #ffffff;
+  font: 500 14px var(--font-body);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.flow-routes button:hover {
+  color: var(--text);
+}
+.flow-routes button.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+}
+.flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.7fr) minmax(0, 1fr);
+  gap: clamp(10px, 2vw, 24px);
+  align-items: stretch;
+}
+.flow-chain {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: clamp(14px, 2vw, 20px);
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.flow-chain > b {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 1.8vw, 22px);
+  font-weight: 600;
+}
+.flow-k {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.flow-k.dim {
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.flow-box {
+  margin-top: 8px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  min-height: 118px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  justify-items: start;
+  transition:
+    border-color 0.4s ease,
+    background-color 0.4s ease;
+}
+.flow-box-k {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+.flow-tok {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--ink);
+  border-radius: 6px;
+  padding: 4px 10px;
+  opacity: 0;
+  transform: translateY(-10px) scale(0.92);
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease,
+    background-color 0.4s ease;
+}
+.flow-state {
+  font-size: 13px;
+  color: var(--signal-ink);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.flow-meter {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+.flow-meter i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--signal);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.9s ease;
+}
+/* Step 1 lock, 2 message, 3 count, 4 release (data-step is 0-based). */
+.flow .vault .flow-tok,
+.flow .vault .flow-state {
+  opacity: 1;
+  transform: none;
+}
+.flow .vault {
+  border-style: solid;
+  border-color: var(--signal);
+  background: rgba(18, 169, 113, 0.05);
+}
+.flow[data-step='2'] .note,
+.flow[data-step='3'] .note {
+  border-style: solid;
+  border-color: var(--signal);
+  background: rgba(18, 169, 113, 0.05);
+}
+.flow[data-step='2'] .note .flow-tok,
+.flow[data-step='2'] .note .flow-state,
+.flow[data-step='3'] .note .flow-state {
+  opacity: 1;
+  transform: none;
+}
+.flow[data-step='2'] .flow-meter i {
+  transform: scaleX(1);
+}
+.flow[data-step='3'] .vault {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: transparent;
+}
+.flow[data-step='3'] .vault .flow-tok {
+  opacity: 0.35;
+  transform: translateY(10px);
+  transition-delay: 1.3s;
+}
+.flow[data-step='3'] .note .flow-tok {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+.flow-rail {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+.flow-line {
+  position: relative;
+  width: 100%;
+  height: 14px;
+  display: block;
+}
+.flow-line::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 6px;
+  border-top: 2px dashed var(--border-strong);
+}
+.flow-pkt {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--signal);
+  opacity: 0;
+}
+.flow[data-step='1'] .flow-pkt {
+  animation: pkt-out 1.6s ease-in-out 0.2s both;
+}
+.flow[data-step='3'] .flow-pkt {
+  animation: pkt-back 1.3s ease-in-out both;
+}
+@keyframes pkt-out {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 14px);
+    opacity: 0;
+  }
+}
+@keyframes pkt-back {
+  0% {
+    left: calc(100% - 14px);
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 0;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-pkt {
+    animation: none !important;
+  }
+  .flow[data-step='1'] .flow-pkt,
+  .flow[data-step='3'] .flow-pkt {
+    opacity: 1;
+    left: calc(50% - 7px);
+  }
+  .flow *,
+  .flow-steps * {
+    transition: none !important;
+  }
+}
+.flow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.flow-steps button {
+  width: 100%;
+  height: 100%;
+  text-align: left;
+  border: 0;
+  border-top: 3px solid var(--border-strong);
+  background: transparent;
+  padding: 12px 4px 4px 0;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  cursor: pointer;
+  font: inherit;
+  color: var(--muted);
+  transition:
+    border-color 0.3s ease,
+    color 0.3s ease;
+}
+.flow-steps b {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--text-soft);
+}
+.flow-n {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.flow-t {
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.flow-steps li.on button {
+  border-top-color: var(--signal);
+  color: var(--text-soft);
+}
+.flow-steps li.on b {
+  color: var(--text);
+}
+@media (max-width: 860px) {
+  .flow {
+    grid-template-columns: 1fr;
+  }
+  .flow-rail {
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+  }
+  .flow-box {
+    min-height: 0;
+  }
+  .flow-steps {
+    grid-template-columns: 1fr;
+  }
+  /* On a phone only the current step's text shows; the others keep their title. */
+  .flow-steps li:not(.on) .flow-t {
+    display: none;
+  }
+  .flow-steps button {
+    grid-template-columns: auto 1fr;
+    column-gap: 10px;
+    align-items: baseline;
+  }
+  .flow-t {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The condensed support table under the diagram. */
+.chain-table {
+  margin-top: clamp(20px, 3vw, 32px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+.chain-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15.5px;
+}
+.chain-table th,
+.chain-table td {
+  text-align: left;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.chain-table thead th {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--paper);
+}
+.chain-table tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chain-table td {
+  color: var(--text-soft);
+}
+.chain-table small {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chain-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.chain-foot {
+  margin-top: 14px;
+  color: var(--text-soft);
+  font-size: 15px;
+  max-width: 86ch;
+}
+@media (max-width: 640px) {
+  .chain-table table,
+  .chain-table tbody,
+  .chain-table tr,
+  .chain-table th,
+  .chain-table td {
+    display: block;
+  }
+  .chain-table thead {
+    display: none;
+  }
+  .chain-table tr {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chain-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .chain-table th,
+  .chain-table td {
+    padding: 2px 0;
+    border: 0;
+  }
+  .chain-table td::before {
+    content: attr(data-h) ' · ';
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .chain-table small {
+    display: inline;
+    margin-left: 6px;
+  }
+}
+
+/* The endings live inside the notes section now. */
+.oc-block {
+  margin-top: clamp(48px, 7vw, 88px);
+}
+.oc-head h3 {
+  font-size: clamp(22px, 2.4vw, 32px);
+  line-height: 1.15;
+}
+.sn-root .notes-sec {
+  min-height: 0;
+}
+.sn-root #chains {
+  padding-bottom: clamp(40px, 6vw, 72px);
+}
+
+/* The hero fits one screen: tighter on short desktops, and on phones the extras give way to the buttons. */
+@media (min-width: 761px) and (max-height: 920px) {
+  .stage-hero h1 {
+    font-size: clamp(36px, 4.4vw, 58px);
+    max-width: 13ch;
+  }
+  .hero-inner {
+    gap: 14px;
+  }
+  .stage-hero .outcomes {
+    min-height: 0;
+  }
+  .scroll-cue {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .stage-hero .sub-more,
+  .scroll-cue {
+    display: none;
+  }
+  .stage-hero .outcomes {
+    min-height: 0;
+  }
+  .stage-hero .outcomes li {
+    font-size: 13.5px;
+  }
+  .stage-hero .side-tabs button {
+    min-height: 38px;
+    padding: 0 14px;
+  }
+}
+@media (max-width: 760px) and (max-height: 720px) {
+  .stage-hero .outcomes {
+    display: none;
+  }
+}

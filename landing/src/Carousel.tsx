@@ -46,7 +46,7 @@ const CARDS: Card[] = [
     side: 'Investors',
     title: 'Aim for income',
     note: 'Phoenix on ETH',
-    body: 'A USDG coupon each quarter while the price stays in range. Below the floor, you share the loss.',
+    body: 'A coupon each quarter while the price stays in range. Below the floor, you share the loss.',
     chart: {
       aria: 'A price path that stays between a floor at 70% and an early-repayment level at 100%, with a coupon paid at each of four dates.',
       shapes: (
@@ -75,7 +75,7 @@ const CARDS: Card[] = [
       labels: [
         { x: 16, y: 21, t: 'early repayment 100%', tone: 'alt' },
         { x: 16, y: 74, t: 'floor 70%', tone: 'warn' },
-        { x: 14, y: 3, t: 'USDG coupons', tone: 'pay' },
+        { x: 14, y: 3, t: 'coupons', tone: 'pay' },
       ],
     },
     start: { role: 'investor', goal: 'yield', type: 'phoenix', syms: ['ETH'], preset: 'Dip & recover' },
@@ -165,7 +165,7 @@ const CARDS: Card[] = [
       labels: [
         { x: 188, y: 9, t: 'shares + coupons', a: 'end', tone: 'pay' },
         { x: 188, y: 56, t: 'shares alone', a: 'end', tone: 'soft' },
-        { x: 16, y: 70, t: 'USDG coupons', tone: 'pay' },
+        { x: 16, y: 70, t: 'coupons', tone: 'pay' },
       ],
     },
     start: { role: 'investor', goal: 'hedge', type: 'reverse-convertible', syms: ['AAPL'], preset: 'Flat' },
@@ -174,7 +174,7 @@ const CARDS: Card[] = [
     side: 'Issuers',
     title: 'Raise funding',
     note: 'Fixed coupon note on ETH',
-    body: 'Raise USDG today against collateral locked in the note.',
+    body: 'Raise stablecoins today against collateral locked in the note.',
     chart: {
       aria: 'Funding comes in at the start; collateral is locked for the whole term; small payments go out each quarter and the repayment at the end, after which the collateral is released.',
       shapes: (
@@ -321,7 +321,7 @@ const CARDS: Card[] = [
       labels: [
         { x: 188, y: 18, t: 'your view: stays above', a: 'end', tone: 'pay' },
         { x: 16, y: 50, t: 'barrier 70%', tone: 'warn' },
-        { x: 188, y: 63, t: 'your cost: USDG coupons', a: 'end', tone: 'soft' },
+        { x: 188, y: 63, t: 'your cost: coupons', a: 'end', tone: 'soft' },
       ],
     },
     start: { role: 'issuer', goal: 'view', type: 'phoenix', syms: ['ETH'], preset: 'Rally' },

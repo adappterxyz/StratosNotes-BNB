@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import './notes.css';
-import Carousel, { type Side } from './Carousel';
+import Carousel from './Carousel';
 import Stage from './Stage';
 import ExplorerPanel from './ExplorerPanel';
 import TermSheet from './TermSheet';
-import { WhyOnchain, Outcomes, Shelf, HowItWorks, ForIssuers, Faq } from './Sections';
+import { WhyOnchain, Outcomes, ForIssuers, Faq } from './Sections';
+import { SideTabs, type Side } from './SideTabs';
+import Chains from './Chains';
+import Numbers from './Numbers';
+import PayoffRule from './PayoffRule';
 import { DEFAULT_START, type ExplorerStart } from './explorer/start';
 import { Wordmark } from './Wordmark';
 
@@ -16,7 +20,22 @@ const REPO_URL = 'https://github.com/adappterxyz/StratosNotes-Robinhood';
 export default function Landing() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState(false);
-  const [side, setSide] = useState<Side>('Investors');
+  // One audience choice for the whole page: hero copy and buttons, the note cards and the section order. Remembered.
+  const [side, setSideState] = useState<Side>(() => {
+    try {
+      return localStorage.getItem('nm-side') === 'Issuers' ? 'Issuers' : 'Investors';
+    } catch {
+      return 'Investors';
+    }
+  });
+  const setSide = useCallback((v: Side) => {
+    setSideState(v);
+    try {
+      localStorage.setItem('nm-side', v);
+    } catch {
+      /* private mode: the choice lasts for this visit */
+    }
+  }, []);
   // The full explorer opens on request only (a card, the "Try a note" buttons, or a #explore link).
   const [explorer, setExplorer] = useState<ExplorerStart | null>(() =>
     typeof window !== 'undefined' && window.location.hash === '#explore' ? DEFAULT_START : null,
@@ -46,7 +65,16 @@ export default function Landing() {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     root.classList.add('js');
-    const els = [...root.querySelectorAll<HTMLElement>('[data-reveal]')];
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      root.classList.remove('js');
+    };
+  }, []);
+  // Reveals. Re-run when the audience changes: that reorders the sections, and a section that moves is mounted anew.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const els = [...root.querySelectorAll<HTMLElement>('[data-reveal]:not(.in)')];
     const io = new IntersectionObserver(
       (entries) =>
         entries.forEach((en) => {
@@ -60,12 +88,10 @@ export default function Landing() {
     els.forEach((el) => io.observe(el));
     const all = window.setTimeout(() => els.forEach((el) => el.classList.add('in')), 1800);
     return () => {
-      window.removeEventListener('scroll', onScroll);
       io.disconnect();
       clearTimeout(all);
-      root.classList.remove('js');
     };
-  }, []);
+  }, [side]);
   useEffect(() => {
     if (!menu) return;
     const onKey = (e: KeyboardEvent) => {
@@ -76,13 +102,75 @@ export default function Landing() {
   }, [menu]);
 
   const links = [
-    ['#outcomes', 'Outcomes'],
+    ['#chains', 'Chains'],
     ['#notes', 'Notes'],
-    ['#how', 'How it works'],
+    ['#why', 'Why onchain'],
     ['#issuers', 'For issuers'],
     ['#faq', 'FAQ'],
     ['/support', 'Supported'],
   ];
+
+  // What a note can do: the cards for this audience, how a note can end, and the explorer to try one.
+  const notes = (
+    <section id="notes" className="notes-sec" key="notes">
+      <div className="wrap">
+        <div className="section-head">
+          <span className="eyebrow">What a note can do</span>
+          <h2>Pick the trade-off you want.</h2>
+          <SideTabs side={side} onChange={setSide} idPrefix="tab" controls="notes-panel" />
+          <p className="side-sub" aria-live="polite">
+            {side === 'Investors'
+              ? 'Every note gives up some upside for something else: a coupon, a buffer, an early exit. Terms are set before you buy, and you can lose money.'
+              : 'Raise stablecoins against collateral you lock, and pay each coupon when it falls due.'}
+          </p>
+        </div>
+      </div>
+      <div id="notes-panel" role="tabpanel" aria-labelledby={`tab-${side}`}>
+        <Carousel key={side} side={side} onOpen={openExplorer} />
+      </div>
+      <div className="wrap">
+        <div className="try-row">
+          <button type="button" className="btn btn-primary" onClick={() => openExplorer()}>
+            Try a note yourself
+          </button>
+          <span>Drag the price and watch what it pays. Example terms, not live prices.</span>
+        </div>
+      </div>
+      <Outcomes />
+      <div className="wrap">
+        <p className="underlyings" data-reveal>
+          <span className="built-label">Underlyings</span>141 Chainlink prices: 87 crypto assets including BTC, ETH and
+          SOL · 34 US stocks and ETFs including TSLA, NVDA, AAPL, AMZN and SPY · 18 currencies · gold and silver.{' '}
+          <a href="/support">See the full list</a>
+        </p>
+      </div>
+    </section>
+  );
+  const live = (
+    <section id="live" className="ts-sec" key="live">
+      <div className="wrap ts-wrap">
+        <div className="section-head" data-reveal>
+          <span className="badge">
+            <i />
+            Live on testnet
+          </span>
+          <h2>Every term on one sheet, before you subscribe.</h2>
+          <p>
+            Each note publishes its coupon, tenor, autocall level, knock-in barrier and the collateral pledged behind
+            it.
+          </p>
+          <div className="hero-cta">
+            <a href={APP_URL} className="btn btn-ghost">
+              Browse live notes
+            </a>
+          </div>
+        </div>
+        <div data-reveal>
+          <TermSheet />
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <div className="sn-root" ref={rootRef}>
@@ -132,117 +220,15 @@ export default function Landing() {
       </header>
 
       <main id="top">
-        <Stage />
-
-        <section id="note-types" className="notes-sec">
-          <div className="wrap">
-            <div className="section-head">
-              <span className="eyebrow">What a note can do</span>
-              <SideTabs side={side} onChange={setSide} />
-              <p className="side-sub" aria-live="polite">
-                {side === 'Investors'
-                  ? 'Terms set before you buy, built for income, partial protection, exposure or a hedge. Paid in the stablecoin of the note’s chain; you can lose money.'
-                  : 'Raise stablecoins against collateral you lock, and pay each coupon when it falls due.'}
-              </p>
-            </div>
-          </div>
-          <div id="notes-panel" role="tabpanel" aria-labelledby={`tab-${side}`}>
-            <Carousel key={side} side={side} onOpen={openExplorer} />
-          </div>
-          <div className="wrap">
-            <div className="try-row">
-              <button type="button" className="btn btn-ghost" onClick={() => openExplorer()}>
-                Try a note yourself
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section id="live" className="ts-sec">
-          <div className="wrap ts-wrap">
-            <div className="section-head" data-reveal>
-              <span className="badge">
-                <i />
-                Live on testnet
-              </span>
-              <h2>Every term on one sheet, before you subscribe.</h2>
-              <p>
-                Each note publishes its coupon, tenor, autocall level, knock-in barrier and the collateral pledged
-                behind it.
-              </p>
-              <div className="hero-cta">
-                <a href={APP_URL} className="btn btn-ghost">
-                  Browse live notes
-                </a>
-              </div>
-            </div>
-            <div data-reveal>
-              <TermSheet />
-            </div>
-          </div>
-        </section>
-
+        <Stage side={side} onSide={setSide} onTry={() => openExplorer()} />
+        <Numbers />
+        <Chains />
+        <PayoffRule />
+        {side === 'Issuers' && <ForIssuers key="issuers" />}
+        {notes}
+        {live}
         <WhyOnchain />
-        <Outcomes />
-        <Shelf />
-
-        <HowItWorks />
-
-        <section id="robinhood">
-          <div className="wrap">
-            <div className="section-head" data-reveal>
-              <span className="eyebrow">Three chains, one engine</span>
-              <h2>Notes run where the stocks live, and where the dollars are.</h2>
-              <p>
-                A note is issued, paid and settled on one chain: Robinhood Chain, Base or BNB Chain. Each has its own
-                tokenized stocks, and any of them can back a note on its own chain and be delivered at maturity there,
-                or stay locked where it is and back a note on another chain, carried by Chainlink CCIP with no bridge
-                and no wrapped token. Chainlink reads every observation and Chainlink CRE runs each payment step the
-                issuer has funded.
-              </p>
-              <a className="card-link" href="/support">
-                See everything supported: chains, stablecoins, underlyings and collateral →
-              </a>
-            </div>
-            <div className="cards3">
-              <div className="card" data-reveal>
-                <div className="card-logo chain-logos">
-                  <img src="/logos/robinhood-chain-dark.svg" alt="Robinhood Chain" height={24} />
-                  <img src="/logos/base.svg" alt="Base" height={20} />
-                  <img src="/logos/bnb-chain.svg" alt="BNB Chain" height={18} />
-                </div>
-                <span className="tag">Where notes run · three testnets</span>
-                <p>
-                  Issue, subscribe, observe and pay on Robinhood Chain testnet, settled in USDG, on Base Sepolia,
-                  settled in USDC, or on BNB Chain testnet, settled in our nmUSD test dollar: the same engine and the
-                  same terms on each.
-                </p>
-              </div>
-              <div className="card" data-reveal>
-                <div className="card-logo">Stock tokens</div>
-                <span className="tag">Collateral across chains</span>
-                <p>
-                  Robinhood&apos;s TSLA, AMZN, AMD and PLTR on Robinhood Chain, and test copies of Coinbase&apos;s B20
-                  stocks on Base and Binance&apos;s bStocks on BNB Chain. Pledge them into a note on their own chain, or
-                  lock them there to back a note on either of the other two. Collateral recovers up to its value;
-                  messages take about 20 minutes each way.
-                </p>
-              </div>
-              <div className="card" data-reveal>
-                <div className="card-logo">
-                  <img src="/logos/chainlink.svg" alt="Chainlink" height={20} />
-                </div>
-                <span className="tag">Prices and automation</span>
-                <p>
-                  141 prices across stocks, crypto, forex and commodities, checked on-chain. Chainlink CRE observes and
-                  pays on schedule, and Chainlink CCIP carries collateral between chains.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <ForIssuers />
+        {side === 'Investors' && <ForIssuers key="issuers" />}
         <Faq />
 
         <section id="cta">
@@ -297,58 +283,6 @@ export default function Landing() {
         </div>
       </footer>
       {explorer && <ExplorerPanel start={explorer} onClose={closeExplorer} />}
-    </div>
-  );
-}
-
-const SIDES: Array<{ id: Side; label: string }> = [
-  { id: 'Investors', label: 'For investors' },
-  { id: 'Issuers', label: 'For issuers' },
-];
-
-/** Investor / issuer pill tabs that filter the carousel. */
-function SideTabs({ side, onChange }: { side: Side; onChange: (s: Side) => void }) {
-  const refs = useRef<Array<HTMLButtonElement | null>>([]);
-  const move = (i: number) => {
-    const n = (i + SIDES.length) % SIDES.length;
-    onChange(SIDES[n].id);
-    refs.current[n]?.focus();
-  };
-  return (
-    <div className="side-tabs" role="tablist" aria-label="Who the notes are for">
-      {SIDES.map((t, i) => (
-        <button
-          key={t.id}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          id={`tab-${t.id}`}
-          type="button"
-          role="tab"
-          aria-selected={side === t.id}
-          aria-controls="notes-panel"
-          tabIndex={side === t.id ? 0 : -1}
-          className={side === t.id ? 'on' : ''}
-          onClick={() => onChange(t.id)}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowRight') {
-              e.preventDefault();
-              move(i + 1);
-            } else if (e.key === 'ArrowLeft') {
-              e.preventDefault();
-              move(i - 1);
-            } else if (e.key === 'Home') {
-              e.preventDefault();
-              move(0);
-            } else if (e.key === 'End') {
-              e.preventDefault();
-              move(SIDES.length - 1);
-            }
-          }}
-        >
-          {t.label}
-        </button>
-      ))}
     </div>
   );
 }

@@ -58,7 +58,7 @@ const C = {
   lineStrong: 0xc3c8d1,
   text: 0x0e1116,
   soft: 0x4a5060,
-  muted: 0x6b7280,
+  muted: 0x4a5060, // labels: Slate, 7.9:1 on white
   blue: 0x0b7a52,
   blueHi: 0x12a971,
   green: 0x12a971,
@@ -110,8 +110,12 @@ function pathY(x: number) {
   return base + wiggle;
 }
 
+/** Every label is drawn this much larger than its nominal height: the smallest ones were hard to read. */
+const LABEL_SCALE = 1.22;
+
 /** A crisp text sprite from a canvas (mono labels, the page's typography). */
 function label(text: string, color: string, height = 0.9, weight = 500) {
+  height *= LABEL_SCALE;
   const pad = 18,
     fontPx = 64;
   const cv = document.createElement('canvas');
@@ -150,10 +154,11 @@ function usdgFace() {
   ctx.arc(64, 64, 52, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
-  ctx.font = '600 34px "Geist Mono", ui-monospace, Menlo, monospace';
+  // A dollar sign, not one chain's token: notes pay in USDG, USDC or nmUSD depending on the chain.
+  ctx.font = '600 72px "Geist Mono", ui-monospace, Menlo, monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('USDG', 64, 66);
+  ctx.fillText('$', 64, 68);
   const tex = new CanvasTexture(cv);
   tex.colorSpace = SRGBColorSpace;
   return tex;
@@ -202,6 +207,7 @@ export class NoteScene {
   private flowUnits!: InstancedMesh;
   private collateral!: Group;
   private bands: Mesh[] = [];
+  private sheetLabels: Sprite[] = [];
   private collLabel!: Sprite;
   private collLabelReleased!: Sprite;
   private collEdges!: LineSegments;
@@ -279,8 +285,11 @@ export class NoteScene {
         new Vector3(X0 - 4, y, -7),
       ]);
       s.add(new LineLoop(edge, new LineBasicMaterial({ color, transparent: true, opacity: 0.8 })));
+      // On the sheet's front edge, ending short of maturity: in view through every beat, never cut by the right edge.
       const l = label(text, hex(color), 0.62);
-      l.position.set(X1 + 4.6, y, 5);
+      l.center.set(1, 0);
+      l.position.set(13, y + 0.12, 5);
+      this.sheetLabels.push(l);
       s.add(l);
     }
 
@@ -381,8 +390,9 @@ export class NoteScene {
         new Vector3(X1 + 4, FLOOR_Y + 0.01, HOLDERS_Z),
       ]);
       s.add(new Line(rail, new LineBasicMaterial({ color: C.green, transparent: true, opacity: 0.5 })));
-      this.holdersLabel = label('HOLDERS · COUPONS IN USDG', hex(C.signalInk), 0.6);
-      this.holdersLabel.position.set(X1 + 4.6, FLOOR_Y + 0.2, HOLDERS_Z);
+      this.holdersLabel = label('HOLDERS · COUPONS PAID', hex(C.signalInk), 0.6);
+      this.holdersLabel.center.set(1, 0);
+      this.holdersLabel.position.set(X1 + 3.6, FLOOR_Y + 0.25, HOLDERS_Z);
       s.add(this.holdersLabel);
     }
 
@@ -402,7 +412,7 @@ export class NoteScene {
         this.coinAt.push(this.obs[k].at + j * 0.004);
         ci++;
       }
-      const tag = label('COUPON PAID IN USDG', hex(C.signalInk), 0.5, 600);
+      const tag = label('COUPON PAID', hex(C.signalInk), 0.5, 600);
       tag.position.set(x - 2.6, FLOOR_Y + 2.2, HOLDERS_Z + 0.6);
       (tag.material as SpriteMaterial).opacity = 0;
       this.couponTags.push({ s: tag, at: this.obs[k].at });
@@ -493,7 +503,7 @@ export class NoteScene {
       }
       this.principal.count = n;
       s.add(this.principal);
-      this.principalTag = label('PRINCIPAL BACK · USDG', hex(C.signalInk), 0.62, 600);
+      this.principalTag = label('PRINCIPAL BACK', hex(C.signalInk), 0.62, 600);
       this.principalTag.position.set(12.4, FLOOR_Y + 3.1, HOLDERS_Z + 0.6);
       (this.principalTag.material as SpriteMaterial).opacity = 0;
       s.add(this.principalTag);
@@ -531,10 +541,10 @@ export class NoteScene {
       g2.lineWidth = 6;
       g2.strokeRect(8, 8, 112, 112);
       g2.fillStyle = '#ffffff';
-      g2.font = '700 38px "Geist Mono", ui-monospace, Menlo, monospace';
+      g2.font = '700 72px "Geist Mono", ui-monospace, Menlo, monospace';
       g2.textAlign = 'center';
       g2.textBaseline = 'middle';
-      g2.fillText('USDG', 64, 66); // the cash-settled form: final ÷ strike in USDG (a physical note delivers the stock token)
+      g2.fillText('$', 64, 68); // the cash-settled form: final ÷ strike in USDG (a physical note delivers the stock token)
       const tex = new CanvasTexture(cv);
       tex.colorSpace = SRGBColorSpace;
       this.tsla = new InstancedMesh(new BoxGeometry(0.95, 0.95, 0.95), new MeshBasicMaterial({ map: tex }), n);
@@ -544,7 +554,7 @@ export class NoteScene {
       }
       this.tsla.count = n;
       s.add(this.tsla);
-      this.tslaTag = label('HOLDERS REPAID FINAL ÷ STRIKE · USDG', hex(C.text), 0.58, 600);
+      this.tslaTag = label('HOLDERS REPAID FINAL ÷ STRIKE', hex(C.text), 0.58, 600);
       this.tslaTag.position.set(9.5, FLOOR_Y + 3.0, HOLDERS_Z + 0.8);
       (this.tslaTag.material as SpriteMaterial).opacity = 0;
       s.add(this.tslaTag);
@@ -648,6 +658,10 @@ export class NoteScene {
 
   /** Lay out every story element for progress p (pure: scrolling back plays it backwards). */
   private apply(p: number, t: number) {
+    // The barrier names come in once the observations start: in the hero and the first beats the camera frames
+    // only part of the sheets, and a half-seen label reads as a mistake.
+    const levels = smooth(span(p, 0.36, 0.44));
+    for (const l of this.sheetLabels) (l.material as SpriteMaterial).opacity = levels;
     // 1. Issue: the lock bands close around the collateral.
     const lock = smooth(span(p, 0.14, 0.24));
     const release = smooth(span(p, 0.86, 0.97));
