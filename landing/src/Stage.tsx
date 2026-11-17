@@ -158,11 +158,11 @@ export default function Stage() {
           <div className="wrap hero-inner">
             <span className="badge">
               <i />
-              Structured notes · Robinhood Chain · Base
+              Structured notes · Robinhood Chain · Base · BNB Chain
             </span>
             <h1>A bespoke instrument for every market.</h1>
             <p className="sub">
-              On-chain structured notes, live in minutes. Collateralize, mint, raise USDG or USDC, and let Chainlink
+              On-chain structured notes, live in minutes. Collateralize, mint, raise stablecoins, and let Chainlink
               oracles and automation handle every fixing and coupon.
             </p>
             <ul className="outcomes" aria-label="For issuers">
@@ -191,6 +191,7 @@ export default function Stage() {
                 Robinhood Chain
               </span>
               <span className="built-mark">Base</span>
+              <span className="built-mark">BNB Chain</span>
               <span className="built-mark">
                 <img src="/logos/chainlink.svg" alt="Chainlink" height={20} />
               </span>

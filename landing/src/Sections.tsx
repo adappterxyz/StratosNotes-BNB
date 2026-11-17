@@ -349,10 +349,10 @@ export function Shelf() {
           ))}
         </div>
         <p className="underlyings" data-reveal>
-          <span className="built-label">Underlyings</span>BTC · ETH · SOL (Chainlink on Ethereum) · US stocks TSLA,
-          AMZN, AMD, PLTR, NVDA, AAPL, SPY, META, MSFT, GOOGL and COIN (Chainlink on Robinhood Chain) · Robinhood
-          Chain's own TSLA, AMZN, AMD and PLTR tokens and WETH, pledged as collateral or delivered at maturity on
-          Robinhood Chain, or locked there to back a note on Base
+          <span className="built-label">Underlyings</span>141 Chainlink prices: 87 crypto assets including BTC, ETH and
+          SOL · 34 US stocks and ETFs including TSLA, NVDA, AAPL, AMZN and SPY · 18 currencies · gold and silver. Stock
+          tokens on Robinhood Chain, Base and BNB Chain can be pledged as collateral or delivered at maturity.{' '}
+          <a href="/support">See the full list</a>
         </p>
       </div>
     </section>
@@ -367,7 +367,7 @@ export function HowItWorks() {
     ],
     [
       'Subscribe',
-      "Investors subscribe on the note's chain: USDG on Robinhood Chain, USDC on Base. The note and its payments live there; its collateral sits in the note or stays locked on the other chain.",
+      "Investors subscribe on the note's chain: USDG on Robinhood Chain, USDC on Base, nmUSD on BNB Chain. The note and its payments live there; its collateral sits in the note or stays locked on another chain.",
     ],
     [
       'Fix and observe',
@@ -410,12 +410,12 @@ export function ForIssuers() {
     ],
     [
       'Fund against collateral',
-      'Pledge collateral, raise USDG or USDC, keep your market view. Stock tokens on Robinhood Chain can back a note on Base without leaving Robinhood Chain.',
+      'Pledge collateral, raise stablecoins, keep your market view. Stock tokens on one chain can back a note on another without leaving their own chain.',
     ],
     ['Automated operations', 'Chainlink CRE reads the fixings and runs each payment step on schedule, on every note.'],
     [
       'Onchain distribution',
-      'During testnet, any wallet with a verified email can subscribe on Robinhood Chain or Base. You remain responsible for where and to whom you offer a note.',
+      'During testnet, any wallet with a verified email can subscribe on Robinhood Chain, Base or BNB Chain. You remain responsible for where and to whom you offer a note.',
     ],
   ];
   return (
@@ -463,7 +463,7 @@ export function Faq() {
     ],
     [
       'What if the collateral is on another chain?',
-      "A note on Base can be backed by Robinhood's stock tokens locked in a vault on Robinhood Chain (and a note on Robinhood Chain by USDC or WETH locked on Base). Chainlink CCIP tells the note about the lock, and on a default or at maturity sends the release back; each message takes about 20 minutes. Chainlink CRE checks every run that the vault still holds what the note counts. The token issuers can still pause or freeze their tokens, and the contracts are not audited.",
+      "A note on any of the three chains can be backed by tokens locked in a vault on either of the others: a Base note by Robinhood's stock tokens locked on Robinhood Chain, a Robinhood Chain note by USDC locked on Base, and so on. Chainlink CCIP tells the note about the lock, and on a default or at maturity sends the release back; each message takes about 20 minutes. Chainlink CRE checks every run that the vault still holds what the note counts. The token issuers can still pause or freeze their tokens, and the contracts are not audited.",
     ],
     [
       'Can I exit before maturity?',

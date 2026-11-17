@@ -35,10 +35,11 @@ type NoteView = {
   economics?: { ratio?: number; collateral?: Array<{ symbol: string; amount: number }> };
   cashToken?: string;
 };
-/** The only cash a showcased note may settle in, per chain: Paxos USDG on Robinhood Chain testnet, Circle USDC on Base Sepolia. */
+/** The only cash a showcased note may settle in, per chain: Paxos USDG on Robinhood Chain testnet, Circle USDC on Base Sepolia, our nmUSD on BNB Chain testnet. */
 const SHOWCASE_CASH: Record<string, { address: string; symbol: string }> = {
   'robinhood-testnet': { address: '0x7e955252e15c84f5768b83c41a71f9eba181802f', symbol: 'USDG' },
   'base-sepolia': { address: '0x036cbd53842c5426634e7929541ec2318f3dcf7e', symbol: 'USDC' },
+  'bnb-testnet': { address: '0x199816ce7e0b2366b408d6f8c3158844f06e3099', symbol: 'nmUSD' },
 };
 type Chain = { key: string; explorer?: string; engine?: string };
 
