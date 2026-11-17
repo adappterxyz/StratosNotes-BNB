@@ -106,7 +106,7 @@ export default function Landing() {
     ['#chains', 'Chains'],
     ['#notes', 'Notes'],
     ['#faq', 'FAQ'],
-    ['/support', 'Supported'],
+    ['/support', 'Docs'],
   ];
 
   // What a note can do: the cards for this audience, how a note can end, and the explorer to try one.
@@ -245,7 +245,7 @@ export default function Landing() {
           <Wordmark dark />
           <div className="foot-links">
             <a href={APP_URL}>App</a>
-            <a href="/support">What&apos;s supported</a>
+            <a href="/support">Docs</a>
             <a href={REPO_URL} target="_blank" rel="noopener">
               GitHub
             </a>
