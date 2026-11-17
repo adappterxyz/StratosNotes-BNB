@@ -3207,3 +3207,22 @@ h2 {
 .chains-band .flow-rail {
   align-self: center;
 }
+
+/* Ticker logos: each on its own white disc, so a dark mark reads on the highlighted (ink) pills too. */
+.tk-sym {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.tk-sym.ic {
+  padding-left: 8px;
+}
+.tk-sym img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--border);
+  object-fit: cover;
+  flex: none;
+}

@@ -1,9 +1,11 @@
 /**
  * The underlyings as a moving ticker: every symbol in the feed catalogue, in two rows that drift opposite ways.
  * Each row is rendered twice end to end so the loop has no seam (the copy is hidden from assistive tech). Hover
- * pauses it; with reduced motion the rows stand still and scroll by hand.
+ * pauses it; with reduced motion the rows stand still and scroll by hand. A symbol with an openly licensed logo
+ * (public/ticker, listed in ticker-icons.ts) shows it; the rest show the ticker alone.
  */
 import { FEED_CATALOGUE, POPULAR_UNDERLYINGS } from '../../packages/core/src/products/params';
+import { TICKER_ICONS } from './ticker-icons';
 
 const all = FEED_CATALOGUE.map((f) => ({ s: f.symbol as string, c: f.assetClass as string }));
 const rows = [all.filter((_, i) => i % 2 === 0), all.filter((_, i) => i % 2 === 1)];
@@ -13,7 +15,10 @@ function Row({ items, reverse }: { items: typeof all; reverse?: boolean }) {
   const run = (hidden: boolean) => (
     <span className="tk-run" aria-hidden={hidden || undefined}>
       {items.map((x) => (
-        <span key={x.s} className={`tk-sym${popular.has(x.s) ? ' hot' : ''}`}>
+        <span key={x.s} className={`tk-sym${popular.has(x.s) ? ' hot' : ''}${TICKER_ICONS.has(x.s) ? ' ic' : ''}`}>
+          {TICKER_ICONS.has(x.s) && (
+            <img src={`/ticker/${x.s}.svg`} alt="" width={26} height={26} loading="lazy" decoding="async" />
+          )}
           {x.s}
         </span>
       ))}
