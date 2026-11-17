@@ -3226,3 +3226,21 @@ h2 {
   object-fit: cover;
   flex: none;
 }
+
+/* The ticker is a selection now: four copies of a short row, moving by one copy per loop. */
+.tk-row {
+  animation-duration: 48s;
+}
+@keyframes tk {
+  to {
+    transform: translateX(-25%);
+  }
+}
+.tk-sym {
+  font-size: clamp(16px, 1.6vw, 20px);
+  padding: 9px 18px 9px 9px;
+}
+.tk-sym img {
+  width: 30px;
+  height: 30px;
+}
