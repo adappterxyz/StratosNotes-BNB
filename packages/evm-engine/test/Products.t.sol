@@ -71,9 +71,10 @@ abstract contract ProductsBase is Test {
     address forwarder = makeAddr("forwarder");
     address admin = makeAddr("admin");
     /// Stand-ins for the real tokens: 1 USDG (also USDC: same decimals), 2 WETH, 3 AMZN, 4 TSLA, 5 TSLAc (a B20
-    /// stock on Base, 8 decimals; BaseStocks.t.sol swaps in the B20StandIn contract itself).
-    MockERC20[6] tokens;
-    uint8[6] decimals = [0, 6, 18, 18, 18, 8];
+    /// stock on Base, 8 decimals; BaseStocks.t.sol swaps in the B20StandIn contract itself), 6 TSLAB (a bStock on BNB
+    /// Chain, 18 decimals; BnbStocks.t.sol swaps in the BStockStandIn).
+    MockERC20[7] tokens;
+    uint8[7] decimals = [0, 6, 18, 18, 18, 8, 18];
     uint256 t0;
     bytes[] fixtures;
     uint256 maxReportGas;
@@ -95,6 +96,7 @@ abstract contract ProductsBase is Test {
         tokens[3] = new MockERC20("AMZN", 18);
         tokens[4] = new MockERC20("TSLA", 18);
         tokens[5] = new MockERC20("TSLAc", 8);
+        tokens[6] = new MockERC20("TSLAB", 18);
         string memory json = vm.readFile("test/fixtures/products.json");
         t0 = vm.parseJsonUint(json, ".t0");
         bytes[] memory runs = vm.parseJsonBytesArray(json, ".runs");

@@ -26,6 +26,8 @@ local-fork:
       url: "http://127.0.0.1:${SN_FORK_PORT}"
     - chain-name: ethereum-testnet-sepolia-base-1
       url: https://base-sepolia-rpc.publicnode.com
+    - chain-name: binance_smart_chain-testnet
+      url: https://bsc-testnet-rpc.publicnode.com
     - chain-name: ethereum-mainnet
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-arbitrum-1
@@ -34,13 +36,16 @@ local-fork:
       url: https://base-rpc.publicnode.com
 
 # Testnet: `cre workflow simulate --broadcast` writes through each chain's MockKeystoneForwarder (Robinhood Chain
-# testnet 0x0b93…3885, Base Sepolia 0x8230…F3e5).
+# testnet 0x0b93…3885, Base Sepolia 0x8230…F3e5, BNB Chain testnet 0xA238…79B0). BNB Chain testnet
+# (binance_smart_chain-testnet) is also where the bStocks stand-ins' multiplier feeds live (docs/BNB-CHAIN.md).
 staging-settings:
   rpcs:
     - chain-name: robinhood-testnet
       url: https://rpc.testnet.chain.robinhood.com
     - chain-name: ethereum-testnet-sepolia-base-1
       url: https://base-sepolia-rpc.publicnode.com
+    - chain-name: binance_smart_chain-testnet
+      url: https://bsc-testnet-rpc.publicnode.com
     - chain-name: ethereum-mainnet
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-arbitrum-1

@@ -26,6 +26,7 @@ const TARGETS: Record<string, Array<{ file: string; chainSelectorName: string }>
   staging: [
     { file: 'deployments/robinhood-testnet.json', chainSelectorName: creNameOf('robinhood-testnet') },
     { file: 'deployments/base-sepolia.json', chainSelectorName: creNameOf('base-sepolia') },
+    { file: 'deployments/bnb-testnet.json', chainSelectorName: creNameOf('bnb-testnet') },
   ],
   'local-fork': [
     {

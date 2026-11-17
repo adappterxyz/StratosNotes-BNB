@@ -50,6 +50,8 @@ export const EVM_FEED_CHAINS: Record<string, { rpc: string; chainId: number }> =
   'ethereum-mainnet-arbitrum-1': { rpc: 'https://arbitrum-one-rpc.publicnode.com', chainId: 42161 },
   'ethereum-mainnet-base-1': { rpc: 'https://base-rpc.publicnode.com', chainId: 8453 },
   'ethereum-testnet-sepolia-base-1': { rpc: 'https://base-sepolia-rpc.publicnode.com', chainId: 84532 },
+  // BNB Chain testnet (also a note chain): the bStocks stand-ins' BStockMultiplierFeed (collateral prices, delivery).
+  'binance_smart_chain-testnet': { rpc: 'https://bsc-testnet-rpc.publicnode.com', chainId: 97 },
 };
 
 /** The JSON-RPC body asking for the head block number. */

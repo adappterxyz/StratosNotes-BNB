@@ -63,6 +63,7 @@ import { engineAbi, flowEngineAbi, lensAbi } from '@sn/sdk';
 const RPCS: Record<NoteChain, { rpc: string; id: number }> = {
   'robinhood-testnet': { rpc: process.env.RPC ?? 'https://rpc.testnet.chain.robinhood.com', id: 46630 },
   'base-sepolia': { rpc: process.env.RPC ?? 'https://base-sepolia-rpc.publicnode.com', id: 84532 },
+  'bnb-testnet': { rpc: process.env.RPC ?? 'https://bsc-testnet-rpc.publicnode.com', id: 97 },
 };
 const chainKey = (process.env.CHAIN ?? 'robinhood-testnet') as NoteChain;
 const net = RPCS[chainKey];

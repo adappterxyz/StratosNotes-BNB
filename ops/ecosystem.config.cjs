@@ -21,6 +21,7 @@ if (fs.existsSync(envFile)) {
 const RPCS = {
   'robinhood-testnet': ['https://rpc.testnet.chain.robinhood.com', 46630],
   'base-sepolia': ['https://base-sepolia-rpc.publicnode.com', 84532],
+  'bnb-testnet': ['https://bsc-testnet-rpc.publicnode.com', 97],
 };
 const issuerBots = Object.entries(RPCS).flatMap(([chain, [rpc, id]]) => {
   const file = path.join(root, 'deployments', `${chain}.json`);

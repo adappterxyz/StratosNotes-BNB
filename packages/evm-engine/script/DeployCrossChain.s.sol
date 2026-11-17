@@ -49,6 +49,8 @@ contract DeployCrossChain is Script {
         bytes32 h = keccak256(bytes(name));
         if (h == keccak256("robinhood-testnet")) return Net(2032988798112970440, 0x30D197C6F5bE050D5525dD94d01760FaCdB67e7C);
         if (h == keccak256("base-sepolia")) return Net(10344971235874465080, 0xD3b06cEbF099CE7DA4AcCf578aaebFDBd6e88a93);
+        // CCIP directory API (testnet) 2026-11-17; isChainSupported both ways with Base Sepolia and Robinhood Chain testnet.
+        if (h == keccak256("bnb-testnet")) return Net(13264668187771770619, 0xE1053aE1857476f36A3C62580FF9b016E8EE8F6f);
         if (h == keccak256("ethereum-sepolia")) return Net(16015286601757825753, 0x0BF3dE8c5D3e8A2B34D2BEeB17ABfCeBaf363A59);
         revert(string.concat("unknown chain: ", name));
     }

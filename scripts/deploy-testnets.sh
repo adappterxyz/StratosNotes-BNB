@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Deploy StratosNotes to the note chains: Robinhood Chain testnet (46630) and Base Sepolia (84532). Per chain:
+# Deploy StratosNotes to the note chains: Robinhood Chain testnet (46630), Base Sepolia (84532) and BNB Chain testnet
+# (97; its nmUSD and bStocks stand-ins: scripts/deploy-bnb.sh). Per chain:
 # FlowEngine (CRE MockKeystoneForwarder, fallback reporter OFF) and NotesLens. Notes use real tokens only
 # (packages/core CHAIN_TOKENS: USDG, WETH and Robinhood's stock tokens on Robinhood Chain; Circle's USDC and WETH on
 # Base), so the retired test tokens and their TokenFaucet are not deployed (TEST_TOKENS=1 brings them back, e.g. for
@@ -11,6 +12,8 @@
 #   REDEPLOY=1 CHAINS=robinhood-testnet bash scripts/deploy-testnets.sh   # replace a live engine (move its file aside)
 #   REHEARSAL=1 bash scripts/deploy-testnets.sh              # against local anvil forks; writes deployments/local/rehearsal/
 #   REHEARSAL=1 SEED=1 bash scripts/deploy-testnets.sh       # ... and issue the demo notes on the forks
+#   REHEARSAL=1 FORKS=1 RPC_BNB_TESTNET=http://127.0.0.1:.. bash scripts/deploy-testnets.sh   # forks someone else runs
+#                                                            # (scripts/deploy-bnb.sh): the RPC_* given, none started
 #
 # A chain whose deployments/<chain>.json already names an engine is SKIPPED unless REDEPLOY=1, so re-running never
 # replaces the live engine (and strands its notes) by accident.
@@ -20,13 +23,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 export PATH="$HOME/.foundry/bin:$PATH"
-CHAINS="${CHAINS:-robinhood-testnet base-sepolia}"
+CHAINS="${CHAINS:-robinhood-testnet base-sepolia bnb-testnet}"
 declare -A RPC=(
   [robinhood-testnet]="${RPC_ROBINHOOD_TESTNET:-https://rpc.testnet.chain.robinhood.com}"
   [base-sepolia]="${RPC_BASE_SEPOLIA:-https://sepolia.base.org}"
+  [bnb-testnet]="${RPC_BNB_TESTNET:-https://bsc-testnet-rpc.publicnode.com}"
 )
-declare -A ID=( [robinhood-testnet]=46630 [base-sepolia]=84532 )
-for c in $CHAINS; do [ -n "${ID[$c]:-}" ] || { echo "unknown chain $c: notes run on robinhood-testnet and base-sepolia"; exit 1; }; done
+declare -A ID=( [robinhood-testnet]=46630 [base-sepolia]=84532 [bnb-testnet]=97 )
+for c in $CHAINS; do [ -n "${ID[$c]:-}" ] || { echo "unknown chain $c: notes run on robinhood-testnet, base-sepolia and bnb-testnet"; exit 1; }; done
 OUTDIR="deployments"
 REHEARSAL="${REHEARSAL:-0}"
 # anvil's well-known test key #0 and account #1 (public; forks only).
@@ -61,6 +65,8 @@ cleanup() { for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || 
 trap cleanup EXIT
 if [ "$REHEARSAL" = "1" ]; then
   OUTDIR="deployments/local/rehearsal"
+fi
+if [ "$REHEARSAL" = "1" ] && [ "${FORKS:-0}" != "1" ]; then
   port=28600
   for c in $CHAINS; do
     port=$((port + 1))
