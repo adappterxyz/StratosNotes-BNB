@@ -206,7 +206,11 @@ export default function Landing() {
             </div>
             <div className="cards3">
               <div className="card" data-reveal>
-                <div className="card-logo">Robinhood Chain · Base · BNB Chain</div>
+                <div className="card-logo chain-logos">
+                  <img src="/logos/robinhood-chain-dark.svg" alt="Robinhood Chain" height={24} />
+                  <img src="/logos/base.svg" alt="Base" height={20} />
+                  <img src="/logos/bnb-chain.svg" alt="BNB Chain" height={18} />
+                </div>
                 <span className="tag">Where notes run · three testnets</span>
                 <p>
                   Issue, subscribe, observe and pay on Robinhood Chain testnet, settled in USDG, on Base Sepolia,

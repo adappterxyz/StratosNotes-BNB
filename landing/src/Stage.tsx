@@ -190,8 +190,13 @@ export default function Stage() {
                 <img src="/logos/robinhood-chain-dark.svg" alt="" height={24} />
                 Robinhood Chain
               </span>
-              <span className="built-mark">Base</span>
-              <span className="built-mark">BNB Chain</span>
+              <span className="built-mark">
+                <img src="/logos/base.svg" alt="" height={20} />
+                Base
+              </span>
+              <span className="built-mark">
+                <img src="/logos/bnb-chain.svg" alt="BNB Chain" height={18} />
+              </span>
               <span className="built-mark">
                 <img src="/logos/chainlink.svg" alt="Chainlink" height={20} />
               </span>

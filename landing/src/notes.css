@@ -2064,3 +2064,6 @@ header.nav.open {
     display: none;
   }
 }
+.card-logo.chain-logos {
+  gap: 14px;
+}
