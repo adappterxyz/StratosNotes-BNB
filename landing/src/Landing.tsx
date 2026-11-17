@@ -9,7 +9,6 @@ import { SideTabs, type Side } from './SideTabs';
 import Chains from './Chains';
 import Numbers from './Numbers';
 import PayoffRule from './PayoffRule';
-import Ticker from './Ticker';
 import { DEFAULT_START, type ExplorerStart } from './explorer/start';
 import { Wordmark } from './Wordmark';
 
@@ -17,6 +16,10 @@ const APP_URL = '/app/';
 const ISSUE_URL = '/app/issue';
 const STRATOS_URL = 'https://stratoslab.xyz';
 const REPO_URL = 'https://github.com/adappterxyz/StratosNotes-Robinhood';
+
+/** Where the page snaps panel by panel (keep in step with the same query in notes.css). */
+const SNAP_QUERY = '(min-width: 960px) and (min-height: 700px) and (prefers-reduced-motion: no-preference)';
+const MIN_ZOOM = 0.62;
 
 export default function Landing() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -71,6 +74,121 @@ export default function Landing() {
       root.classList.remove('js');
     };
   }, []);
+  // Snap panels: on a screen large enough to snap, scale each panel's content down (never up) until it fits the
+  // height under the nav. A panel that would need to shrink too far is left at full size and scrolls freely.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const mq = window.matchMedia(SNAP_QUERY);
+    const inner = (p: HTMLElement) =>
+      (p.querySelector(':scope > .snap-in') ?? p.firstElementChild) as HTMLElement | null;
+    let raf = 0;
+    const fit = () => {
+      raf = 0;
+      for (const p of root.querySelectorAll<HTMLElement>('.snap')) {
+        const el = inner(p);
+        if (!el) continue;
+        el.style.zoom = '';
+        el.style.removeProperty('--snap-z');
+        if (!mq.matches) continue;
+        const cs = getComputedStyle(p);
+        const room = window.innerHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+        const h = el.getBoundingClientRect().height;
+        if (h <= room + 1) continue;
+        // Two passes: at the wider measure a chart can grow back a little.
+        let z = room / h;
+        for (let pass = 0; pass < 2 && z >= MIN_ZOOM; pass++) {
+          el.style.zoom = z.toFixed(3);
+          // The side gutters stay where the nav's are: the content gets shorter, not narrower.
+          el.style.setProperty('--snap-z', z.toFixed(3));
+          const now = el.getBoundingClientRect().height;
+          if (now <= room + 1) break;
+          z *= room / now;
+        }
+        if (z < MIN_ZOOM) {
+          el.style.zoom = '';
+          el.style.removeProperty('--snap-z');
+        }
+      }
+    };
+    const ask = () => {
+      if (!raf) raf = requestAnimationFrame(fit);
+    };
+    const ro = new ResizeObserver(ask);
+    root.querySelectorAll<HTMLElement>('.snap').forEach((p) => {
+      const el = inner(p);
+      if (el) ro.observe(el);
+    });
+    window.addEventListener('resize', ask);
+    mq.addEventListener('change', ask);
+    document.fonts?.ready.then(ask).catch(() => undefined);
+    ask();
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', ask);
+      mq.removeEventListener('change', ask);
+      cancelAnimationFrame(raf);
+    };
+  }, [side]);
+  // Wheel steps. Native snapping sends a single wheel notch back where it came from (it has to pass half a screen),
+  // so on a snapping screen one wheel gesture moves one panel. Inside anything taller than the screen (the scroll
+  // story, a panel too tall to fit) the wheel scrolls as usual until that area's edge. Touch and keys stay native.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || explorer) return;
+    const mq = window.matchMedia(SNAP_QUERY);
+    let acc = 0,
+      lockedUntil = 0,
+      lastWheel = 0;
+    const areas = () => {
+      const els = [...root.querySelectorAll<HTMLElement>('.stage, .snap, #cta')];
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      return els.map((el, i) => {
+        const top = el.getBoundingClientRect().top + window.scrollY;
+        const last = i === els.length - 1;
+        return { top, bottom: last ? document.documentElement.scrollHeight : top + el.offsetHeight, max };
+      });
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (!mq.matches || e.ctrlKey || e.metaKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      const now = performance.now();
+      // While a step is under way, and until the wheel (or a trackpad's momentum) has gone quiet, swallow the rest.
+      if (now < lockedUntil || (lockedUntil && now - lastWheel < 140)) {
+        lastWheel = now;
+        e.preventDefault();
+        return;
+      }
+      lockedUntil = 0;
+      lastWheel = now;
+      const list = areas();
+      const y = window.scrollY,
+        vh = window.innerHeight,
+        mid = y + vh / 2;
+      const i = Math.max(
+        0,
+        list.findIndex((a) => mid >= a.top && mid < a.bottom),
+      );
+      const cur = list[i];
+      const down = e.deltaY > 0;
+      // More of this area to see in that direction: scroll as usual.
+      if (down ? cur.bottom > y + vh + 2 : cur.top < y - 2) {
+        acc = 0;
+        return;
+      }
+      e.preventDefault();
+      acc += e.deltaY;
+      if (Math.abs(acc) < 30) return;
+      acc = 0;
+      const to = list[i + (down ? 1 : -1)];
+      if (!to) return;
+      // Down: the next area's top. Up: the previous area's last screen (its top, unless it is taller than the screen).
+      const target = Math.min(to.max, down ? to.top : Math.max(to.top, to.bottom - vh));
+      lockedUntil = now + 650;
+      window.scrollTo({ top: target, behavior: 'smooth' });
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, [side, explorer]);
   // Reveals. Re-run when the audience changes: that reorders the sections, and a section that moves is mounted anew.
   useEffect(() => {
     const root = rootRef.current;
@@ -112,34 +230,37 @@ export default function Landing() {
   // What a note can do: the cards for this audience, how a note can end, and the explorer to try one.
   const notes = (
     <section id="notes" className="notes-sec" key="notes">
-      <div className="wrap">
-        <div className="section-head">
-          <span className="eyebrow">What a note can do</span>
-          <h2>Pick your trade-off.</h2>
-          <SideTabs side={side} onChange={setSide} idPrefix="tab" controls="notes-panel" />
-          <p className="side-sub" aria-live="polite">
-            {side === 'Investors'
-              ? 'A note pays a set coupon while a price stays above a line. Terms set before you buy. You can lose money.'
-              : 'Lock collateral. Raise stablecoins. Pay coupons as they fall due.'}
-          </p>
-        </div>
-      </div>
-      <div id="notes-panel" role="tabpanel" aria-labelledby={`tab-${side}`}>
-        <Carousel key={side} side={side} onOpen={openExplorer} />
-      </div>
-      <div className="wrap">
-        <div className="try-row">
-          <button type="button" className="btn btn-primary" onClick={() => openExplorer()}>
-            Try a note yourself
-          </button>
+      <div className="snap">
+        <div className="snap-in">
+          <div className="wrap">
+            <div className="section-head">
+              <span className="eyebrow">What a note can do</span>
+              <h2>Pick your trade-off.</h2>
+              <SideTabs side={side} onChange={setSide} idPrefix="tab" controls="notes-panel" />
+              <p className="side-sub" aria-live="polite">
+                {side === 'Investors'
+                  ? 'A note pays a set coupon while a price stays above a line. Terms set before you buy. You can lose money.'
+                  : 'Lock collateral. Raise stablecoins. Pay coupons as they fall due.'}
+              </p>
+            </div>
+          </div>
+          <div id="notes-panel" role="tabpanel" aria-labelledby={`tab-${side}`}>
+            <Carousel key={side} side={side} onOpen={openExplorer} />
+          </div>
+          <div className="wrap">
+            <div className="try-row">
+              <button type="button" className="btn btn-primary" onClick={() => openExplorer()}>
+                Try a note yourself
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       <Outcomes />
-      <Ticker />
     </section>
   );
   const live = (
-    <section id="live" className="ts-sec" key="live">
+    <section id="live" className="ts-sec snap" key="live">
       <div className="wrap ts-wrap">
         <div className="section-head" data-reveal>
           <span className="badge">

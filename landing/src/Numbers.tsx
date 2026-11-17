@@ -3,6 +3,7 @@
  * live, counted from /api/notes, and appear only once at least MIN_LIVE_NOTES notes have been issued.
  */
 import { useEffect, useRef, useState } from 'react';
+import Ticker from './Ticker';
 import {
   CHAIN_TOKENS,
   FEED_CATALOGUE,
@@ -112,27 +113,11 @@ export default function Numbers() {
   }, []);
 
   return (
-    <section id="numbers" className="numbers" aria-label="notes.markets in numbers">
-      <div className="wrap" ref={ref}>
-        <dl className="num-row">
-          {STATIC.map(([n, t]) => (
-            <div key={t}>
-              <dd>
-                <Count to={n} run={seen} />
-              </dd>
-              <dt>{t}</dt>
-            </div>
-          ))}
-        </dl>
-        {live.length > 0 && (
-          <dl className="num-row live">
-            <div className="num-live-k">
-              <span className="badge">
-                <i />
-                Live on testnet
-              </span>
-            </div>
-            {live.map(([n, t]) => (
+    <section id="numbers" className="numbers snap" aria-label="notes.markets in numbers">
+      <div className="snap-in">
+        <div className="wrap" ref={ref}>
+          <dl className="num-row">
+            {STATIC.map(([n, t]) => (
               <div key={t}>
                 <dd>
                   <Count to={n} run={seen} />
@@ -141,7 +126,26 @@ export default function Numbers() {
               </div>
             ))}
           </dl>
-        )}
+          {live.length > 0 && (
+            <dl className="num-row live">
+              <div className="num-live-k">
+                <span className="badge">
+                  <i />
+                  Live on testnet
+                </span>
+              </div>
+              {live.map(([n, t]) => (
+                <div key={t}>
+                  <dd>
+                    <Count to={n} run={seen} />
+                  </dd>
+                  <dt>{t}</dt>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+        <Ticker />
       </div>
     </section>
   );

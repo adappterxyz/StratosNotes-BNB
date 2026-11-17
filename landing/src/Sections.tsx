@@ -24,7 +24,7 @@ export function WhyOnchain() {
     ['Who can take part', 'Private-bank clients, six-figure tickets', 'Testnet: any wallet with a verified email'],
   ];
   return (
-    <section id="why" className="why-band">
+    <section id="why" className="why-band snap">
       <div className="wrap">
         <div className="section-head" data-reveal>
           <span className="eyebrow">Why onchain</span>
@@ -237,7 +237,7 @@ export function Outcomes() {
   };
   const e = ENDINGS[i];
   return (
-    <div id="outcomes" className="oc-block">
+    <div id="outcomes" className="oc-block snap">
       <div className="wrap">
         <div className="section-head oc-head" data-reveal>
           <h3>Three endings. All written on day one.</h3>
@@ -302,7 +302,7 @@ export function ForIssuers() {
     ['Onchain distribution', 'Any verified wallet can subscribe, on three chains.'],
   ];
   return (
-    <section id="issuers">
+    <section id="issuers" className="snap">
       <div className="wrap">
         <div className="section-head" data-reveal>
           <span className="eyebrow">For issuers</span>
@@ -357,7 +357,7 @@ export function Faq() {
     ],
   ];
   return (
-    <section id="faq">
+    <section id="faq" className="snap">
       <div className="wrap">
         <div className="section-head" data-reveal>
           <span className="eyebrow">FAQ</span>

@@ -44,8 +44,7 @@ export default function Ticker() {
   return (
     <div className="ticker" data-reveal>
       <div className="wrap tk-head">
-        <b>{FEED_CATALOGUE.length}</b>
-        <span>underlyings. Stocks, crypto, currencies, gold.</span>
+        <span>Stocks, crypto, currencies, gold.</span>
         <a href="/support#underlyings">All of them →</a>
       </div>
       <div className="tk-rows">

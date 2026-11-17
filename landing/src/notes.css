@@ -3264,3 +3264,71 @@ h2 {
   padding-top: 72px;
   padding-bottom: 88px;
 }
+
+/* ---- Snap panels: on a large enough screen each content section is one screen and the page snaps to it. The
+   scroll story is taller than the screen, so it scrolls freely inside and snaps only at its start. Landing.tsx
+   scales a panel's content down when the screen is short (same query there). ---- */
+@media (min-width: 960px) and (min-height: 700px) and (prefers-reduced-motion: no-preference) {
+  html:has(.sn-root .snap) {
+    scroll-snap-type: y mandatory;
+  }
+  .sn-root .stage {
+    scroll-snap-align: start;
+  }
+  .sn-root .snap {
+    box-sizing: border-box;
+    min-height: 100svh;
+    padding: 92px 0 32px !important;
+    margin: 0 !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    scroll-margin-top: 0;
+  }
+  .sn-root .snap > * {
+    width: 100%;
+  }
+  .sn-root .chains-band,
+  .sn-root .notes-sec {
+    padding: 0 !important;
+  }
+  .sn-root .payoff-rule {
+    display: none;
+  }
+  .sn-root .snap .wrap,
+  .sn-root .snap .wrap.tk-head {
+    max-width: calc(var(--maxw) / var(--snap-z, 1));
+    padding-inline: calc(clamp(16px, 4vw, 32px) / var(--snap-z, 1));
+  }
+  /* The note cards: heading and audience tabs share a row, so the cards get the height. */
+  .sn-root .notes-sec .snap-in .section-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 10px 24px;
+    max-width: none;
+    margin-bottom: 20px;
+  }
+  .sn-root .notes-sec .snap-in .section-head > .eyebrow,
+  .sn-root .notes-sec .snap-in .section-head > .side-sub {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+  .sn-root .notes-sec .snap-in .try-row {
+    margin-top: 10px;
+  }
+  .sn-root .numbers .ticker {
+    margin-top: 72px;
+  }
+  .sn-root #cta {
+    padding: 96px 0 56px;
+  }
+  .sn-root .foot {
+    scroll-snap-align: end;
+  }
+}
+.numbers .ticker {
+  margin-top: 56px;
+}

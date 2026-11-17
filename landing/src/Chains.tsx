@@ -159,40 +159,50 @@ const MARK: Record<NoteChain, { src: string; h: number; named?: boolean }> = {
 export default function Chains() {
   return (
     <section id="chains" className="chains-band">
-      <div className="wrap">
-        <div className="section-head" data-reveal>
-          <span className="eyebrow">Three chains, one engine</span>
-          <h2>
-            Collateral stays put.
-            <br />
-            The note runs anywhere.
-          </h2>
+      <div className="snap">
+        <div className="wrap">
+          <div className="section-head" data-reveal>
+            <span className="eyebrow">Cross-chain collateral</span>
+            <h2>
+              Collateral stays put.
+              <br />
+              The note runs anywhere.
+            </h2>
+          </div>
+
+          <ChainFlow />
         </div>
+      </div>
 
-        <ChainFlow />
-
-        <div className="chain-cards">
-          {NOTE_CHAINS.map((c) => (
-            <div key={c} className="chain-card" data-reveal>
-              <div className="chain-name">
-                <img src={MARK[c].src} alt={MARK[c].named ? NOTE_CHAIN_SHORT[c] : ''} height={MARK[c].h} />
-                {!MARK[c].named && NOTE_CHAIN_SHORT[c]}
+      <div className="snap">
+        <div className="wrap">
+          <div className="section-head" data-reveal>
+            <span className="eyebrow">Where notes run</span>
+            <h2>Three chains. One engine.</h2>
+          </div>
+          <div className="chain-cards">
+            {NOTE_CHAINS.map((c) => (
+              <div key={c} className="chain-card" data-reveal>
+                <div className="chain-name">
+                  <img src={MARK[c].src} alt={MARK[c].named ? NOTE_CHAIN_SHORT[c] : ''} height={MARK[c].h} />
+                  {!MARK[c].named && NOTE_CHAIN_SHORT[c]}
+                </div>
+                <span className="chain-cash">
+                  Paid in <b>{CHAIN_CASH[c].token}</b>
+                </span>
+                <span className="chain-toks">
+                  {stocksOn(c).map((t) => (
+                    <code key={t}>{t}</code>
+                  ))}
+                </span>
               </div>
-              <span className="chain-cash">
-                Paid in <b>{CHAIN_CASH[c].token}</b>
-              </span>
-              <span className="chain-toks">
-                {stocksOn(c).map((t) => (
-                  <code key={t}>{t}</code>
-                ))}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
+          <p className="chain-foot" data-reveal>
+            Testnets. The stock tokens on Base and BNB Chain, and nmUSD, are our own test copies.{' '}
+            <a href="/support">Everything supported →</a>
+          </p>
         </div>
-        <p className="chain-foot" data-reveal>
-          Testnets. The stock tokens on Base and BNB Chain, and nmUSD, are our own test copies.{' '}
-          <a href="/support">Everything supported →</a>
-        </p>
       </div>
     </section>
   );
