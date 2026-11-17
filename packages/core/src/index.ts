@@ -7,6 +7,7 @@ export * from './decode';
 export * from './compile-evm';
 export * from './products/params';
 export * from './products/base-stocks';
+export * from './products/bnb-stocks';
 export * from './products/payoff';
 export * from './products/instantiate';
 export * from './products/library';

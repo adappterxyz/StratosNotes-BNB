@@ -153,7 +153,7 @@ describe('Coinbase B20 stocks on Base: notes.markets stand-ins on Base Sepolia',
       collateral: [{ symbol: 'NVDAc', haircutPct: 60 }],
     };
     expect(collateralTokenOf(p, 'NVDAc')).toEqual({ token: 'NVDAc.base', decimals: 8 });
-    expect(RECEIPTS['NVDAc.base']).toMatchObject({ home: RH, asset: BASE, symbol: 'NVDAc' });
+    expect(RECEIPTS['NVDAc.base']).toMatchObject({ homes: [RH, 'bnb-testnet'], asset: BASE, symbol: 'NVDAc' });
     expect(instantiateProduct(p).bpmnXml).toContain(B20_STOCKS.NVDAc.feed);
     expect(validateProductParams(p)).toEqual([]);
   });
