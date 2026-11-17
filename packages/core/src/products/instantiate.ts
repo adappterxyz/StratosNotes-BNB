@@ -47,6 +47,7 @@ import type { AssetDefinition, AssetOperation, TemplateField } from '../types';
 import {
   cashTokenOf,
   collateralFeed,
+  collateralMultiplierFeed,
   collateralTokenOf,
   deliverableToken,
   economicsOf,
@@ -87,6 +88,9 @@ export const colAsset = (c: CollateralSymbol) => `col_${c}`;
 export const pledgeField = (c: CollateralSymbol) => `pledge_${c}`;
 export const haircutField = (c: CollateralSymbol) => `haircut_${c}`;
 export const priceField = (c: CollateralSymbol) => `px_${c}`;
+/** A bStock key's two readings: its share's price and its multiplier (px_ = their product). */
+export const sharePriceField = (c: CollateralSymbol) => `pxs_${c}`;
+export const priceMultField = (c: CollateralSymbol) => `pxm_${c}`;
 export const topUpField = (c: CollateralSymbol) => `topUp_${c}`;
 export const deliverAsset = (sym: string) => `d_${sym}`;
 
@@ -149,7 +153,20 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
   // Collateral prices ride on the same CRE reports as the observations (USD needs none). Each key has its own feed:
   // TSLA (Robinhood's token) the share's, TSLAc (a B20 stock) Chainlink's per-token feed on Base (collateralFeed).
   const priced = col.filter((c) => c.symbol !== 'USD');
-  const priceFields = () => priced.map((c) => oracleField(priceField(c.symbol), collateralFeed(c.symbol)!));
+  // A bStock (TSLAB…) has no per-token feed: its price is the share's (shareField) x its multiplier (multField), both
+  // read here, multiplied by a formula field under the same px_ name, so coverage and defaults read it like any other.
+  const priceFields = () =>
+    priced.flatMap((c) => {
+      const m = collateralMultiplierFeed(c.symbol);
+      if (!m) return [oracleField(priceField(c.symbol), collateralFeed(c.symbol)!)];
+      return [
+        oracleField(sharePriceField(c.symbol), collateralFeed(c.symbol)!),
+        oracleField(priceMultField(c.symbol), m),
+        field(priceField(c.symbol), 'Decimal', {
+          formula: `${sharePriceField(c.symbol)} * ${priceMultField(c.symbol)}`,
+        }),
+      ];
+    });
   // Physical delivery in a B20 stock (TSLAc for TSLA on Base): the shares owed are paid at shares / multiplier token
   // units, the multiplier read at the final observation (B20MultiplierFeed). Other tokens are 1:1 with the underlying.
   const multipliers = physical

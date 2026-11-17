@@ -14,7 +14,7 @@ import {TokenFaucet} from "../src/test-tokens/TokenFaucet.sol";
 ///   CHAIN=robinhood-testnet FORWARDER_MODE=mock OWNER=0x... TEST_TOKENS=1 \
 ///   forge script script/Deploy.s.sol --rpc-url $RPC --private-key $KEY --broadcast
 ///
-/// CHAIN:          robinhood-testnet | base-sepolia (the two note chains) | robinhood-mainnet
+/// CHAIN:          robinhood-testnet | base-sepolia | bnb-testnet (the note chains) | robinhood-mainnet
 /// FORWARDER_MODE: mock (`cre workflow simulate --broadcast` writes through the MockKeystoneForwarder) or
 ///                 production (a deployed CRE workflow writes through the KeystoneForwarder)
 /// FORWARDER:      optional override; required on robinhood-mainnet, where CRE has no forwarder yet
@@ -39,6 +39,10 @@ contract Deploy is Script {
         }
         if (h == keccak256("base-sepolia")) {
             return Target(84532, 0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5, 0xF8344CFd5c43616a4366C34E3EEE75af79a74482, true);
+        }
+        if (h == keccak256("bnb-testnet")) {
+            // CRE's forwarder directory (binance_smart_chain-testnet), typeAndVersion checked on-chain 2026-11-17.
+            return Target(97, 0xA238e42cb8782808DBb2F37E19859244ec4779B0, 0x76c9cf548b4179F8901cda1f8623568b58215E62, true);
         }
         if (h == keccak256("robinhood-mainnet")) return Target(4663, address(0), address(0), false);
         revert(string.concat("unknown CHAIN ", name));

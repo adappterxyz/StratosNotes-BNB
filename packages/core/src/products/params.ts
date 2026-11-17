@@ -39,6 +39,16 @@ import {
   type B20Symbol,
   type FeedSpec,
 } from './base-stocks';
+import {
+  BNB_TEST_CASH,
+  BNB_TESTNET_DEPLOYMENT,
+  BNB_TESTNET_FEED_CHAIN,
+  BSTOCK_SYMBOLS,
+  BSTOCKS,
+  bstockMultiplierFeed,
+  isBStockSymbol,
+  type BStockSymbol,
+} from './bnb-stocks';
 import { ASSET_CLASSES } from './feed-directory';
 import { FEED_CATALOGUE, type CatalogueFeed, type CatalogueSymbol } from './feeds-catalogue';
 
@@ -69,9 +79,10 @@ export interface Underlying {
  * The symbol is the VALUATION KEY: which feed prices one token. Robinhood's stock tokens are priced as the share (TSLA,
  * share-price feed). Coinbase's B20 stocks on Base (TSLAc, NVDAc…: notes.markets' stand-ins on Base Sepolia,
  * docs/BASE-STOCKS.md) have keys of their own, valued with Chainlink's per-token feeds (share price x multiplier):
- * never TSLA, which would price them as shares.
+ * never TSLA, which would price them as shares. Binance's bStocks on BNB Chain (TSLAB, NVDAB…: stand-ins on BNB Chain
+ * testnet, docs/BNB-CHAIN.md) also have keys of their own, valued as the share's feed x the token's multiplier.
  */
-export type CollateralSymbol = 'USD' | 'ETH' | 'TSLA' | 'AMZN' | 'AMD' | 'PLTR' | B20Symbol;
+export type CollateralSymbol = 'USD' | 'ETH' | 'TSLA' | 'AMZN' | 'AMD' | 'PLTR' | B20Symbol | BStockSymbol;
 export interface CollateralTerm {
   symbol: CollateralSymbol;
   /** Value counted toward coverage, % of market value (USD 100; volatile tokens lower). Per issuance, 0–100. */
@@ -160,16 +171,19 @@ export type CollateralChain = 'note' | (string & {});
  * The chains notes run on (each a "home": issuance, subscriptions, coupons, redemption, the note tokens, the escrow
  * and Chainlink CRE's reports all happen there):
  *  - Robinhood Chain testnet (chain id 46630), cash USDG (Paxos), collateral USDG, WETH and Robinhood's stock tokens;
- *  - Base Sepolia (chain id 84532), cash USDC (Circle), collateral USDC, WETH and the B20 stock stand-ins (TSLAc…).
+ *  - Base Sepolia (chain id 84532), cash USDC (Circle), collateral USDC, WETH and the B20 stock stand-ins (TSLAc…);
+ *  - BNB Chain testnet (chain id 97), cash nmUSD (notes.markets' test dollar: BNB testnet has no stablecoin with a
+ *    public faucet), collateral nmUSD and the bStocks stand-ins (TSLAB…).
  * A term sheet with no `chain` is a Robinhood Chain note (HOME_CHAIN, the first note chain): its definition stays as
  * it was before Base was added. A term sheet naming any other chain is refused.
  */
-export type NoteChain = 'robinhood-testnet' | 'base-sepolia';
+export type NoteChain = 'robinhood-testnet' | 'base-sepolia' | 'bnb-testnet';
 export const HOME_CHAIN: NoteChain = 'robinhood-testnet';
 export const BASE_CHAIN: NoteChain = 'base-sepolia';
+export const BNB_CHAIN: NoteChain = 'bnb-testnet';
 /** Every chain a term sheet may name. */
-export const NOTE_CHAINS: readonly NoteChain[] = [HOME_CHAIN, BASE_CHAIN];
-/** Where new notes are issued: both. */
+export const NOTE_CHAINS: readonly NoteChain[] = [HOME_CHAIN, BASE_CHAIN, BNB_CHAIN];
+/** Where new notes are issued: all of them (a chain is offered once the served config lists its engine). */
 export const ISSUANCE_CHAINS: readonly NoteChain[] = NOTE_CHAINS;
 export const isNoteChain = (c: string | null | undefined): c is NoteChain =>
   !!c && (NOTE_CHAINS as readonly string[]).includes(c);
@@ -182,16 +196,25 @@ export const isLegacyChainTerms = (p: Pick<ProductParams, 'chain'> | null | unde
 export const NOTE_CHAIN_LABELS: Record<NoteChain, string> = {
   'robinhood-testnet': 'Robinhood Chain testnet',
   'base-sepolia': 'Base Sepolia',
+  'bnb-testnet': 'BNB Chain testnet',
 };
 /** Short names, for chips and sentences ("locked on Robinhood Chain"). */
 export const NOTE_CHAIN_SHORT: Record<NoteChain, string> = {
   'robinhood-testnet': 'Robinhood Chain',
   'base-sepolia': 'Base',
+  'bnb-testnet': 'BNB Chain',
 };
+/** "A", "A and B", "A, B and C". */
+export const joinList = (xs: readonly string[], word: 'and' | 'or') =>
+  xs.length < 2 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} ${word} ${xs[xs.length - 1]}`;
 /** A chain key's label (a note chain's name, else the key itself). */
 export const chainLabel = (key: string) => (isNoteChain(key) ? NOTE_CHAIN_LABELS[key] : key);
 /** EVM chain ids. */
-export const NOTE_CHAIN_IDS: Record<NoteChain, number> = { 'robinhood-testnet': 46630, 'base-sepolia': 84532 };
+export const NOTE_CHAIN_IDS: Record<NoteChain, number> = {
+  'robinhood-testnet': 46630,
+  'base-sepolia': 84532,
+  'bnb-testnet': 97,
+};
 /** The note's chain: its terms' `chain`, else the home chain. */
 export const noteChainOf = (p: Pick<ProductParams, 'chain'> | null | undefined): NoteChain =>
   isNoteChain(p?.chain) ? p.chain : HOME_CHAIN;
@@ -222,7 +245,16 @@ export interface ChainToken {
    * from, and the real Coinbase token on Base mainnet. Absent for every other token.
    */
   b20?: { delivers: string; multiplierFeed: `0x${string}`; standIn: boolean; mainnetToken: `0x${string}` };
+  /**
+   * A bStock (Binance's; on BNB Chain testnet notes.markets' stand-in): the same fields as `b20`. Valued as the share
+   * (`delivers`) x its multiplier, delivered at shares / multiplier token units.
+   */
+  bstock?: { delivers: string; multiplierFeed: `0x${string}`; standIn: boolean; mainnetToken: `0x${string}` };
 }
+
+/** The multiplier feed of a token paid at shares / multiplier (a B20 stock or a bStock), if it is one. */
+export const multiplierFeedOf = (t: Pick<ChainToken, 'b20' | 'bstock'> | null | undefined) =>
+  t?.b20?.multiplierFeed ?? t?.bstock?.multiplierFeed;
 
 /** Whether a token's contract exists (not the NOT_DEPLOYED placeholder of a stand-in still to deploy). */
 export const isDeployedToken = (t: Pick<ChainToken, 'address'> | null | undefined) => isDeployedAddress(t?.address);
@@ -335,7 +367,40 @@ export const CHAIN_TOKENS: Record<NoteChain, Record<string, ChainToken>> = {
     },
     ...b20StandIns(),
   },
+  'bnb-testnet': {
+    nmUSD: {
+      token: BNB_TEST_CASH.token,
+      decimals: BNB_TEST_CASH.decimals,
+      address: BNB_TESTNET_DEPLOYMENT.cash,
+      name: `${BNB_TEST_CASH.name} (test, no value)`,
+      issuer: 'notes.markets (test token)',
+      valuedAs: 'USD',
+    },
+    ...bstockStandIns(),
+  },
 };
+
+/** The BNB Chain testnet stand-ins for Binance's bStocks (addresses: BNB_TESTNET_DEPLOYMENT). */
+function bstockStandIns(): Record<string, ChainToken> {
+  return Object.fromEntries(
+    BSTOCK_SYMBOLS.map((s) => {
+      const b = BSTOCKS[s];
+      const d = BNB_TESTNET_DEPLOYMENT.tokens[s];
+      return [
+        s,
+        {
+          token: s,
+          decimals: b.decimals,
+          address: d.token,
+          name: `${b.name} (test stand-in for Binance ${s})`,
+          issuer: 'notes.markets (test stand-in)',
+          valuedAs: s,
+          bstock: { delivers: b.ticker, multiplierFeed: d.multiplierFeed, standIn: true, mainnetToken: b.mainnetToken },
+        } satisfies ChainToken,
+      ];
+    }),
+  );
+}
 
 /** The Base Sepolia stand-ins for Coinbase's B20 stocks (addresses: BASE_SEPOLIA_STOCKS). */
 function b20StandIns(): Record<string, ChainToken> {
@@ -375,14 +440,21 @@ export function chainTokenFor(chain: NoteChain, sym: string): ChainToken | undef
  * paid at shares / multiplier).
  */
 export function deliveryTokenFor(chain: NoteChain, sym: string): ChainToken | undefined {
-  return chainTokenFor(chain, sym) ?? Object.values(CHAIN_TOKENS[chain] ?? {}).find((t) => t.b20?.delivers === sym);
+  return (
+    chainTokenFor(chain, sym) ??
+    Object.values(CHAIN_TOKENS[chain] ?? {}).find((t) => (t.b20 ?? t.bstock)?.delivers === sym)
+  );
 }
 
 /**
  * The suffix of a receipt for a token locked on each chain: TSLA locked on Robinhood Chain backs a Base note as
  * `TSLA.rh`; USDC locked on Base backs a Robinhood Chain note as `USDC.base`.
  */
-export const RECEIPT_SUFFIX: Record<NoteChain, string> = { 'robinhood-testnet': 'rh', 'base-sepolia': 'base' };
+export const RECEIPT_SUFFIX: Record<NoteChain, string> = {
+  'robinhood-testnet': 'rh',
+  'base-sepolia': 'base',
+  'bnb-testnet': 'bnb',
+};
 
 /** A receipt the home gateway mints for a token locked in the vault on another chain. */
 export interface RemoteToken {
@@ -422,10 +494,15 @@ function lockable(home: NoteChain, asset: NoteChain): Partial<Record<CollateralS
  * A pair is usable once its gateway and vault are deployed and the served config lists the receipts (the app checks
  * the chain's `tokens`; the issue step refuses a receipt with no address).
  */
-export const REMOTE_COLLATERAL: Record<NoteChain, Record<string, Partial<Record<CollateralSymbol, RemoteToken>>>> = {
-  'robinhood-testnet': { 'base-sepolia': lockable('robinhood-testnet', 'base-sepolia') },
-  'base-sepolia': { 'robinhood-testnet': lockable('base-sepolia', 'robinhood-testnet') },
-};
+export const REMOTE_COLLATERAL: Record<
+  NoteChain,
+  Record<string, Partial<Record<CollateralSymbol, RemoteToken>>>
+> = Object.fromEntries(
+  NOTE_CHAINS.map((home) => [
+    home,
+    Object.fromEntries(NOTE_CHAINS.filter((a) => a !== home).map((asset) => [asset, lockable(home, asset)])),
+  ]),
+) as Record<NoteChain, Record<string, Partial<Record<CollateralSymbol, RemoteToken>>>>;
 /** Whether the terms hold their collateral on another chain, not in the note itself. */
 export const isRemoteCollateral = (p: Pick<ProductParams, 'collateralChain'> | null | undefined) =>
   !!p?.collateralChain && p.collateralChain !== 'note';
@@ -437,20 +514,27 @@ export const remoteCollateralOf = (
 /** The chains a note on `chain` may hold its collateral on, other than itself. */
 export const remoteCollateralChains = (chain: NoteChain): NoteChain[] =>
   Object.keys(REMOTE_COLLATERAL[chain] ?? {}).filter(isNoteChain);
-/** Every receipt symbol a gateway may mint, with where its token is locked (for labels and the template check). */
+/**
+ * Every receipt symbol a gateway may mint, with where its token is locked (for labels and the template check). The
+ * same receipt (TSLAc.base) can back notes on several home chains, each gateway minting its own: `homes` lists them.
+ */
 export const RECEIPTS: Record<
   string,
-  { home: NoteChain; asset: NoteChain; symbol: CollateralSymbol; locked: ChainToken }
-> = Object.fromEntries(
-  NOTE_CHAINS.flatMap((home) =>
-    Object.entries(REMOTE_COLLATERAL[home]).flatMap(([asset, m]) =>
-      Object.entries(m).map(([symbol, r]) => [
-        r!.token,
-        { home, asset: asset as NoteChain, symbol: symbol as CollateralSymbol, locked: r!.locked },
-      ]),
-    ),
-  ),
-);
+  { homes: NoteChain[]; asset: NoteChain; symbol: CollateralSymbol; locked: ChainToken }
+> = {};
+for (const home of NOTE_CHAINS)
+  for (const [asset, m] of Object.entries(REMOTE_COLLATERAL[home]))
+    for (const [symbol, r] of Object.entries(m)) {
+      const known = RECEIPTS[r!.token];
+      if (known) known.homes.push(home);
+      else
+        RECEIPTS[r!.token] = {
+          homes: [home],
+          asset: asset as NoteChain,
+          symbol: symbol as CollateralSymbol,
+          locked: r!.locked,
+        };
+    }
 /** "TSLA.rh" -> the chain it is locked on (robinhood-testnet), from its suffix; null for a plain token. */
 export function receiptChain(token: string): NoteChain | null {
   const m = /\.([a-z]+)$/.exec(token);
@@ -484,6 +568,14 @@ export const DEFAULT_HAIRCUT: Record<CollateralSymbol, number> = {
   AAPLc: 60,
   MSFTc: 60,
   METAc: 60,
+  // Binance's bStocks (stand-ins on BNB Chain testnet): the same.
+  TSLAB: 60,
+  NVDAB: 60,
+  AAPLB: 60,
+  MSFTB: 60,
+  AMZNB: 60,
+  GOOGLB: 60,
+  METAB: 60,
 };
 export const COLLATERAL_SYMBOLS = Object.keys(DEFAULT_HAIRCUT) as CollateralSymbol[];
 export const DEFAULT_COLLATERAL: CollateralTerm[] = [{ symbol: 'USD', haircutPct: 100 }];
@@ -514,11 +606,16 @@ export function deliverableToken(
   const chain = noteChainOf(p);
   const local = deliveryTokenFor(chain, symbol);
   if (!local) return undefined;
-  const b20 = local.b20 && isB20Symbol(local.token) ? local.token : null;
+  const feed =
+    local.b20 && isB20Symbol(local.token)
+      ? b20MultiplierFeed(local.token)
+      : local.bstock && isBStockSymbol(local.token)
+        ? bstockMultiplierFeed(local.token)
+        : null;
   return {
     token: local.token,
     decimals: local.decimals,
-    ...(b20 ? { multiplier: { field: multiplierField(symbol), feed: b20MultiplierFeed(b20) } } : {}),
+    ...(feed ? { multiplier: { field: multiplierField(symbol), feed } } : {}),
   };
 }
 
@@ -545,7 +642,16 @@ export function collateralTokenOf(
 export function collateralFeed(c: CollateralSymbol): FeedSpec | undefined {
   if (c === 'USD') return undefined;
   if (isB20Symbol(c)) return b20PriceFeed(c);
+  if (isBStockSymbol(c)) return FEEDS[BSTOCKS[c].ticker];
   return FEEDS[c];
+}
+
+/**
+ * The multiplier a collateral key's price is scaled by: a bStock (TSLAB…) is worth its share's price (collateralFeed)
+ * x its multiplier (its BStockMultiplierFeed). Undefined for every other key (priced by one feed).
+ */
+export function collateralMultiplierFeed(c: CollateralSymbol): FeedSpec | undefined {
+  return isBStockSymbol(c) ? bstockMultiplierFeed(c) : undefined;
 }
 
 /**
@@ -558,12 +664,13 @@ export function undeployedTokensOf(p: ProductParams): string[] {
   if (p.settlement === 'physical')
     for (const u of p.underlyings ?? []) {
       const t = deliveryTokenFor(chain, u.symbol);
-      if (t && (!isDeployedToken(t) || (t.b20 && !isDeployedAddress(t.b20.multiplierFeed)))) out.add(t.token);
+      if (t && (!isDeployedToken(t) || (multiplierFeedOf(t) && !isDeployedAddress(multiplierFeedOf(t)))))
+        out.add(t.token);
     }
   for (const c of economicsOf(p).collateral) {
     if (c.symbol === 'USD') continue;
     const t = isRemoteCollateral(p) ? remoteCollateralOf(p)?.[c.symbol]?.locked : chainTokenFor(chain, c.symbol);
-    if (t && !isDeployedToken(t)) out.add(t.token);
+    if (t && (!isDeployedToken(t) || (t.bstock && !isDeployedAddress(t.bstock.multiplierFeed)))) out.add(t.token);
   }
   return [...out];
 }
@@ -581,16 +688,16 @@ export const collateralChoices = (p: Pick<ProductParams, 'chain' | 'collateralCh
 /** Whether `c` can be pledged on these terms now: it has a token there, and that token is deployed. */
 export function canPledgeNow(p: Pick<ProductParams, 'chain' | 'collateralChain'>, c: CollateralSymbol): boolean {
   if (!collateralTokenOf(p, c)) return false;
-  if (c === 'USD') return true;
+  // USD too: the stablecoin is checked like any token (BNB Chain testnet's nmUSD exists only after its deploy).
   const t = isRemoteCollateral(p) ? remoteCollateralOf(p)?.[c]?.locked : chainTokenFor(noteChainOf(p), c);
-  return !t || isDeployedToken(t);
+  return !t || (isDeployedToken(t) && (!t.bstock || isDeployedAddress(t.bstock.multiplierFeed)));
 }
 
 /** Whether underlying `sym` can be delivered on these terms' chain now: a token exists there and is deployed. */
 export function canDeliverNow(p: Pick<ProductParams, 'chain'>, sym: string): boolean {
   if (!deliverableToken(p, sym)) return false;
   const t = deliveryTokenFor(noteChainOf(p), sym);
-  return !t || (isDeployedToken(t) && (!t.b20 || isDeployedAddress(t.b20.multiplierFeed)));
+  return !t || (isDeployedToken(t) && (!multiplierFeedOf(t) || isDeployedAddress(multiplierFeedOf(t))));
 }
 
 /**
@@ -601,7 +708,7 @@ export function collateralSymbolOfAsset(assetName: string): string | null {
   const m = /^Collateral (\S+)$/.exec(assetName);
   if (!m) return null;
   const t = m[1].replace(/\.[a-z]+$/, '');
-  if (['USD', 'USDG', 'USDC', 'tUSD'].includes(t)) return 'USD';
+  if (['USD', 'USDG', 'USDC', 'tUSD', 'nmUSD'].includes(t)) return 'USD';
   for (const chain of NOTE_CHAINS) {
     const v = CHAIN_TOKENS[chain][t]?.valuedAs;
     if (v) return v;
@@ -664,7 +771,7 @@ export function validateProductParams(p: ProductParams): string[] {
   const pending = undeployedTokensOf(p);
   if (pending.length)
     e.push(
-      `${pending.join(', ')} ${pending.length > 1 ? 'are' : 'is'} not deployed yet (notes.markets' test stand-in${pending.length > 1 ? 's' : ''} for Coinbase's B20 stocks, docs/BASE-STOCKS.md): pick another token for now.`,
+      `${pending.join(', ')} ${pending.length > 1 ? 'are' : 'is'} not deployed yet (notes.markets' test token${pending.length > 1 ? 's' : ''}: docs/BASE-STOCKS.md, docs/BNB-CHAIN.md): pick another token for now.`,
     );
   return e;
 }
@@ -798,15 +905,19 @@ export function validateTermSheet(p: ProductParams): string[] {
         ? `This note runs on ${NOTE_CHAIN_LABELS[noteChainOf(p)]} already: pledge the collateral into the note (no lock needed).`
         : `A ${NOTE_CHAIN_SHORT[noteChainOf(p)]} note can't hold collateral on ${chainLabel(p.collateralChain!)}: pledge it into the note${
             remoteCollateralChains(noteChainOf(p)).length
-              ? `, or lock it on ${remoteCollateralChains(noteChainOf(p))
-                  .map((c) => NOTE_CHAIN_LABELS[c])
-                  .join(' or ')}`
+              ? `, or lock it on ${joinList(
+                  remoteCollateralChains(noteChainOf(p)).map((c) => NOTE_CHAIN_LABELS[c]),
+                  'or',
+                )}`
               : ''
           }.`,
     );
   if (isLegacyChainTerms(p))
     e.push(
-      `Notes run on ${NOTE_CHAINS.map((c) => NOTE_CHAIN_LABELS[c]).join(' and ')} only: '${p.chain}' is not a note chain.`,
+      `Notes run on ${joinList(
+        NOTE_CHAINS.map((c) => NOTE_CHAIN_LABELS[c]),
+        'and',
+      )} only: '${p.chain}' is not a note chain.`,
     );
   if (p.payouts !== undefined && !PAYOUT_METHODS.includes(p.payouts))
     e.push(`Payouts must be one of ${PAYOUT_METHODS.join(', ')}.`);
@@ -844,6 +955,7 @@ export function maxCouponPerUnit(p: ProductParams, k: number): number {
 export const CHAIN_CASH: Record<NoteChain, { token: string; decimals: number }> = {
   'robinhood-testnet': { token: 'USDG', decimals: 6 },
   'base-sepolia': { token: 'USDC', decimals: 6 },
+  'bnb-testnet': { token: BNB_TEST_CASH.token, decimals: BNB_TEST_CASH.decimals },
 };
 export const CASH_TOKEN = CHAIN_CASH[HOME_CHAIN];
 export const TEST_CASH_TOKEN = { token: 'tUSD', decimals: 6 };
@@ -851,9 +963,12 @@ export const TEST_CASH_TOKEN = { token: 'tUSD', decimals: 6 };
 export const cashTokenOf = (chain: NoteChain | Pick<ProductParams, 'chain'> | null | undefined) =>
   CHAIN_CASH[typeof chain === 'string' ? chain : noteChainOf(chain)];
 
-/** Each note chain's cash token address. */
+/** Each note chain's cash token address (a chain whose cash token is not deployed yet, BNB Chain testnet's nmUSD
+ * before scripts/deploy-bnb.sh, is left out). */
 export const CASH_TOKENS: Record<string, `0x${string}`> = Object.fromEntries(
-  NOTE_CHAINS.map((c) => [c, CHAIN_TOKENS[c][CHAIN_CASH[c].token].address]),
+  NOTE_CHAINS.map((c) => [c, CHAIN_TOKENS[c][CHAIN_CASH[c].token].address] as const).filter(([, a]) =>
+    isDeployedAddress(a),
+  ),
 );
 /** Paxos's USDG faucet (Robinhood Chain testnet). */
 export const CASH_FAUCET = 'https://faucet.paxos.com';
@@ -883,16 +998,28 @@ export const FAUCETS = {
   robinhood: 'https://faucet.testnet.chain.robinhood.com',
   /** Base Sepolia ETH for gas (Base lists more at docs.base.org, network faucets). */
   baseSepolia: ['https://faucets.chain.link/base-sepolia', 'https://www.alchemy.com/faucets/base-sepolia'],
+  /** BNB Chain testnet tBNB for gas (needs 0.002 BNB on mainnet in the same wallet). */
+  bnbTestnet: ['https://www.bnbchain.org/en/testnet-faucet'],
 } as const;
+/**
+ * notes.markets' faucet on BNB Chain testnet (StockFaucet: the bStocks stand-ins and nmUSD, rate-limited), once
+ * deployed; null before.
+ */
+export const BNB_FAUCET: `0x${string}` | null = isDeployedAddress(BNB_TESTNET_DEPLOYMENT.faucet)
+  ? BNB_TESTNET_DEPLOYMENT.faucet
+  : null;
+const BNB_FAUCET_PAGE = BNB_FAUCET ? `https://testnet.bscscan.com/address/${BNB_FAUCET}#writeContract` : '';
 /** Where to get each chain's cash token. */
 export const CASH_FAUCETS: Record<NoteChain, string> = {
   'robinhood-testnet': FAUCETS.usdg,
   'base-sepolia': FAUCETS.usdc,
+  'bnb-testnet': BNB_FAUCET_PAGE,
 };
 /** Where to get ETH for gas on each chain. */
 export const GAS_FAUCETS: Record<NoteChain, readonly string[]> = {
   'robinhood-testnet': [FAUCETS.robinhood],
   'base-sepolia': FAUCETS.baseSepolia,
+  'bnb-testnet': FAUCETS.bnbTestnet,
 };
 /**
  * The B20 stand-ins' faucet on Base Sepolia (B20StockFaucet: claim(token) or claimAll(), rate-limited; b20FaucetAbi),
@@ -910,6 +1037,7 @@ export const STOCK_TOKEN_FAUCETS: Record<string, string> = {
   ...(BASE_STOCK_FAUCET
     ? { 'base-sepolia': `https://sepolia.basescan.org/address/${BASE_STOCK_FAUCET}#writeContract` }
     : {}),
+  ...(BNB_FAUCET ? { 'bnb-testnet': BNB_FAUCET_PAGE } : {}),
 };
 
 /** The tokens a note can deliver on its chain, for messages ("WETH for ETH, …"). */
@@ -994,6 +1122,7 @@ export const FEED_CHAIN_LABELS: Record<string, string> = {
   'robinhood-mainnet': 'Robinhood Chain',
   [BASE_MAINNET_FEED_CHAIN]: 'Base',
   [BASE_SEPOLIA_FEED_CHAIN]: 'Base Sepolia',
+  [BNB_TESTNET_FEED_CHAIN]: 'BNB Chain testnet',
 };
 
 const base = { issuePricePct: 100, underlyings: [FEEDS.ETH], observations: 4 };

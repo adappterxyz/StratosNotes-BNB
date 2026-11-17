@@ -13,7 +13,7 @@ import {ProductsBase} from "./Products.t.sol";
 /// collateral, try to report as a stranger, poke. Ghost state records anything that should never happen.
 contract NoteHandler is Test {
     FlowEngine public engine;
-    MockERC20[6] public tokens;
+    MockERC20[7] public tokens;
     bytes internal fixture; // the fixture, ABI-encoded (structs with nested arrays don't copy to storage)
     uint256 public pid;
     address public issuer;
@@ -32,7 +32,7 @@ contract NoteHandler is Test {
     bool public strangerDepositLost;
     uint256 public calls;
 
-    constructor(FlowEngine engine_, MockERC20[6] memory tokens_, bytes memory fixture_, uint256 pid_, address issuer_, address pa_, address forwarder_, address[] memory investors_) {
+    constructor(FlowEngine engine_, MockERC20[7] memory tokens_, bytes memory fixture_, uint256 pid_, address issuer_, address pa_, address forwarder_, address[] memory investors_) {
         engine = engine_;
         tokens = tokens_;
         fixture = fixture_;

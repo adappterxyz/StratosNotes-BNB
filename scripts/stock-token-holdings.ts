@@ -25,6 +25,7 @@ import {
 const RPCS: Record<NoteChain, string> = {
   'robinhood-testnet': process.env.RPC_ROBINHOOD_TESTNET ?? 'https://rpc.testnet.chain.robinhood.com',
   'base-sepolia': process.env.RPC_BASE_SEPOLIA ?? 'https://base-sepolia-rpc.publicnode.com',
+  'bnb-testnet': process.env.RPC_BNB_TESTNET ?? 'https://bsc-testnet-rpc.publicnode.com',
 };
 const chains = (process.env.CHAINS?.split(/[ ,]+/).filter(Boolean) ?? NOTE_CHAINS) as NoteChain[];
 for (const c of chains) if (!RPCS[c]) throw new Error(`CHAINS: ${NOTE_CHAINS.join(', ')}`);

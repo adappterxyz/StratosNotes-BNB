@@ -5,9 +5,10 @@
  *   npx tsx scripts/xc-plan.ts env <home> <asset>
  *       shell assignments for the pair: routers, selectors, the vault's TOKENS and the wire step's TOKENS, DECIMALS
  *       and SYMBOLS (e.g. TSLA.rh), one per line (eval them).
- *   npx tsx scripts/xc-plan.ts assemble <home> <asset> <dir> <engine> <owner> <out>
+ *   npx tsx scripts/xc-plan.ts assemble <home> <asset> <dir> <engine> <owner> <out> [<base>]
  *       read <dir>/{gateway,vault,wire}.json (written by DeployCrossChain.s.sol with OUT=) and <dir>/blocks.json, write
- *       the deployments/crosschain/<home>.json record (CrossChainDeployment) to <out>, and check it.
+ *       the deployments/crosschain/<home>.json record (CrossChainDeployment) to <out>, and check it. With <base> (the
+ *       home's record so far, same gateway), its other vaults are kept and this one is added (or replaced).
  *   npx tsx scripts/xc-plan.ts check <file>
  *       check a record against the directory and the plan (exit 1 with the problems).
  */
@@ -24,7 +25,7 @@ import {
 
 const [cmd, ...args] = process.argv.slice(2);
 const chainArg = (s: string | undefined): NoteChain => {
-  if (!isNoteChain(s)) throw new Error(`not a note chain: ${s} (robinhood-testnet | base-sepolia)`);
+  if (!isNoteChain(s)) throw new Error(`not a note chain: ${s} (robinhood-testnet | base-sepolia | bnb-testnet)`);
   return s;
 };
 const read = <T>(p: string): T => JSON.parse(readFileSync(p, 'utf8')) as T;
@@ -48,7 +49,8 @@ if (cmd === 'env') {
 } else if (cmd === 'assemble') {
   const home = chainArg(args[0]);
   const asset = chainArg(args[1]);
-  const [dir, engine, owner, outPath] = args.slice(2);
+  const [dir, engine, owner, outPath, basePath] = args.slice(2);
+  const base = basePath ? read<CrossChainDeployment>(basePath) : null;
   const g = read<{ gateway: string; router: string; feePoolWei: string; version?: number }>(`${dir}/gateway.json`);
   const v = read<{ vault: string; router: string; gateway: string }>(`${dir}/vault.json`);
   const w = read<{ receipts: Record<string, string> | string; gasLimit: number; vault: string }>(`${dir}/wire.json`);
@@ -56,19 +58,24 @@ if (cmd === 'env') {
   const receipts = typeof w.receipts === 'string' ? (JSON.parse(w.receipts) as Record<string, string>) : w.receipts;
   if (v.gateway.toLowerCase() !== g.gateway.toLowerCase()) throw new Error('the vault answers to another gateway');
   if (w.vault.toLowerCase() !== v.vault.toLowerCase()) throw new Error('the gateway was wired to another vault');
+  if (base && base.home.gateway.toLowerCase() !== g.gateway.toLowerCase())
+    throw new Error(`${basePath} is another gateway's record`);
   const rec: CrossChainDeployment = {
-    home: {
-      chain: home,
-      chainId: XC_CHAINS[home].chainId,
-      selector: XC_CHAINS[home].selector,
-      router: g.router,
-      engine,
-      gateway: g.gateway,
-      gatewayBlock: blocks.gateway,
-      version: g.version ?? 2,
-      feePoolWei: String(g.feePoolWei),
-    },
+    home: base
+      ? { ...base.home }
+      : {
+          chain: home,
+          chainId: XC_CHAINS[home].chainId,
+          selector: XC_CHAINS[home].selector,
+          router: g.router,
+          engine,
+          gateway: g.gateway,
+          gatewayBlock: blocks.gateway,
+          version: g.version ?? 2,
+          feePoolWei: String(g.feePoolWei),
+        },
     remotes: [
+      ...(base?.remotes.filter((r) => r.chain !== asset) ?? []),
       {
         chain: asset,
         chainId: XC_CHAINS[asset].chainId,
@@ -93,8 +100,18 @@ if (cmd === 'env') {
   if (errs.length) throw new Error(`cross-chain record does not check out:\n  ${errs.join('\n  ')}`);
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, JSON.stringify(rec, null, 2) + '\n');
+  const added = rec.remotes[rec.remotes.length - 1];
   console.log(
-    `${outPath}: gateway ${rec.home.gateway} on ${home}, vault ${rec.remotes[0].vault} on ${asset}, receipts ${Object.keys(rec.remotes[0].receipts).join(', ')}`,
+    `${outPath}: gateway ${rec.home.gateway} on ${home}, vault ${added.vault} on ${asset}, receipts ${Object.keys(added.receipts).join(', ')}${
+      base
+        ? ` (kept: ${
+            base.remotes
+              .filter((r) => r.chain !== asset)
+              .map((r) => r.chain)
+              .join(', ') || 'none'
+          })`
+        : ''
+    }`,
   );
 } else if (cmd === 'check') {
   const errs = checkCrossChainDeployment(read<CrossChainDeployment>(args[0]));

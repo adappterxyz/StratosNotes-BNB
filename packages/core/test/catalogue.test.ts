@@ -241,6 +241,14 @@ describe('the generated catalogue', () => {
       'AAPLc',
       'MSFTc',
       'METAc',
+      // Binance's bStocks (stand-ins on BNB Chain testnet): the share's price x the token's multiplier.
+      'TSLAB',
+      'NVDAB',
+      'AAPLB',
+      'MSFTB',
+      'AMZNB',
+      'GOOGLB',
+      'METAB',
     ]);
     const p: ProductParams = {
       ...EXAMPLE_PRODUCTS.fcn,

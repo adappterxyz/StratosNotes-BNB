@@ -1,4 +1,5 @@
 import { isB20Symbol, isDeployedAddress } from './products/base-stocks';
+import { isBStockSymbol } from './products/bnb-stocks';
 import {
   NOTE_CHAIN_IDS,
   NOTE_CHAINS,
@@ -281,6 +282,22 @@ export const XC_CHAINS: Record<NoteChain, XcChain> = {
     rpc: 'https://sepolia.base.org',
     explorer: 'https://sepolia.basescan.org',
   },
+  // Checked 2026-11-17: CCIP directory API (testnet) and on-chain isChainSupported both ways with Base Sepolia and
+  // Robinhood Chain testnet (Router 1.2.0; fee tokens LINK, WBNB, native tBNB); forwarders from CRE's forwarder
+  // directory, typeAndVersion() "MockKeystoneForwarder 1.0.0" and "KeystoneForwarder 1.0.0".
+  'bnb-testnet': {
+    chain: 'bnb-testnet',
+    chainId: NOTE_CHAIN_IDS['bnb-testnet'],
+    selector: '13264668187771770619',
+    router: '0xE1053aE1857476f36A3C62580FF9b016E8EE8F6f',
+    creName: 'binance_smart_chain-testnet',
+    forwarder: {
+      mock: '0xa238e42cb8782808dbb2f37e19859244ec4779b0',
+      production: '0x76c9cf548b4179F8901cda1f8623568b58215E62',
+    },
+    rpc: 'https://bsc-testnet-rpc.publicnode.com',
+    explorer: 'https://testnet.bscscan.com',
+  },
 };
 /** Deployment chain names to CRE chain-selector names. */
 export const CRE_CHAIN_NAMES: Record<string, string> = Object.fromEntries(
@@ -368,7 +385,7 @@ export function checkCrossChainDeployment(x: CrossChainDeployment): string[] {
   for (const r of x.remotes) {
     const asset = XC_CHAINS[r.chain as NoteChain];
     if (!asset || r.chain === x.home.chain) {
-      e.push(`remote chain ${r.chain} is not the other note chain`);
+      e.push(`remote chain ${r.chain} is not another note chain`);
       continue;
     }
     if (r.chainId !== asset.chainId) e.push(`${r.chain} chainId ${r.chainId} != ${asset.chainId}`);
@@ -378,7 +395,7 @@ export function checkCrossChainDeployment(x: CrossChainDeployment): string[] {
     const plan = wirePlan(home.chain, asset.chain);
     const optional = new Set(
       planOf(home.chain, asset.chain)
-        .filter((w) => isB20Symbol(w.valuedAs))
+        .filter((w) => isB20Symbol(w.valuedAs) || isBStockSymbol(w.valuedAs))
         .map((w) => w.symbol),
     );
     const got = Object.keys(r.receipts)

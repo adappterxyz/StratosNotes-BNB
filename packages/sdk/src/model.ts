@@ -66,6 +66,18 @@ export const CHAINS: Record<string, ChainInfo> = {
     cre: true,
     stablecoin: { symbol: 'USDC', address: CASH_TOKENS['base-sepolia'], decimals: 6 },
   },
+  // The third note chain: cash in nmUSD, notes.markets' test dollar (docs/BNB-CHAIN.md); CRE writes through BNB Chain
+  // testnet's forwarder.
+  'bnb-testnet': {
+    key: 'bnb-testnet',
+    family: 'evm',
+    name: 'BNB Chain testnet',
+    chainId: 97,
+    testnet: true,
+    explorer: 'https://testnet.bscscan.com',
+    cre: true,
+    stablecoin: { symbol: 'nmUSD', address: CASH_TOKENS['bnb-testnet'], decimals: 6 },
+  },
   // Config only (no deployment yet): mainnet settlement in USDG; CRE cannot write here yet (keeper-fallback).
   'robinhood-mainnet': {
     key: 'robinhood-mainnet',

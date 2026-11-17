@@ -46,8 +46,8 @@ const cashOf = (p: ProductParams) => instantiateProduct(p).assets.find((a) => a.
 
 describe('two note chains: Robinhood Chain testnet and Base Sepolia', () => {
   it('knows both, with their chain ids, cash tokens and faucets', () => {
-    expect(NOTE_CHAINS).toEqual([RH, BASE]);
-    expect(NOTE_CHAIN_IDS).toEqual({ [RH]: 46630, [BASE]: 84532 });
+    expect(NOTE_CHAINS).toEqual([RH, BASE, 'bnb-testnet']);
+    expect(NOTE_CHAIN_IDS).toEqual({ [RH]: 46630, [BASE]: 84532, 'bnb-testnet': 97 });
     expect(isNoteChain(BASE)).toBe(true);
     expect(isNoteChain('arbitrum-sepolia')).toBe(false);
     expect(cashTokenOf(RH)).toEqual({ token: 'USDG', decimals: 6 });
@@ -119,6 +119,7 @@ describe('two note chains: Robinhood Chain testnet and Base Sepolia', () => {
       { symbol: 'AAPLc', token: 'AAPLc' },
       { symbol: 'MSFTc', token: 'MSFTc' },
       { symbol: 'METAc', token: 'METAc' },
+      ...['TSLAB', 'NVDAB', 'AAPLB', 'MSFTB', 'AMZNB', 'GOOGLB', 'METAB'].map((symbol) => ({ symbol, token: null })),
     ]);
     const p: ProductParams = {
       ...EXAMPLE_PRODUCTS.phoenix,
@@ -178,6 +179,7 @@ describe('collateral locked on the other chain, both directions', () => {
       { symbol: 'AAPLc', token: null },
       { symbol: 'MSFTc', token: null },
       { symbol: 'METAc', token: null },
+      ...['TSLAB', 'NVDAB', 'AAPLB', 'MSFTB', 'AMZNB', 'GOOGLB', 'METAB'].map((symbol) => ({ symbol, token: null })),
     ]);
     expect(cashOf(p)).toMatchObject({ token: 'USDC' });
     // Valued by the stock's own Chainlink feed, like TSLA pledged on Robinhood Chain.
@@ -193,15 +195,27 @@ describe('collateral locked on the other chain, both directions', () => {
     expect(receiptChain('USDG')).toBeNull();
     expect(receiptChain('TSLA.arb')).toBeNull();
     const b20 = ['AAPLc', 'AMZNc', 'METAc', 'MSFTc', 'NVDAc', 'TSLAc'].map((s) => `${s}.base`);
+    const bstocks = ['TSLAB', 'NVDAB', 'AAPLB', 'MSFTB', 'AMZNB', 'GOOGLB', 'METAB', 'nmUSD'].map((s) => `${s}.bnb`);
     expect(Object.keys(RECEIPTS).sort()).toEqual(
-      ['AMD.rh', 'AMZN.rh', 'PLTR.rh', 'TSLA.rh', 'USDC.base', 'USDG.rh', 'WETH.base', 'WETH.rh', ...b20].sort(),
+      [
+        'AMD.rh',
+        'AMZN.rh',
+        'PLTR.rh',
+        'TSLA.rh',
+        'USDC.base',
+        'USDG.rh',
+        'WETH.base',
+        'WETH.rh',
+        ...b20,
+        ...bstocks,
+      ].sort(),
     );
     // A Base stock locked on Base keeps its own valuation key (per-token feed), not the share's.
-    expect(RECEIPTS['TSLAc.base']).toMatchObject({ home: RH, asset: BASE, symbol: 'TSLAc' });
-    expect(RECEIPTS['TSLA.rh']).toMatchObject({ home: BASE, asset: RH, symbol: 'TSLA' });
-    expect(RECEIPTS['USDC.base']).toMatchObject({ home: RH, asset: BASE, symbol: 'USD' });
-    expect(remoteCollateralChains(RH)).toEqual([BASE]);
-    expect(remoteCollateralChains(BASE)).toEqual([RH]);
+    expect(RECEIPTS['TSLAc.base']).toMatchObject({ homes: [RH, 'bnb-testnet'], asset: BASE, symbol: 'TSLAc' });
+    expect(RECEIPTS['TSLA.rh']).toMatchObject({ homes: [BASE, 'bnb-testnet'], asset: RH, symbol: 'TSLA' });
+    expect(RECEIPTS['USDC.base']).toMatchObject({ homes: [RH, 'bnb-testnet'], asset: BASE, symbol: 'USD' });
+    expect(remoteCollateralChains(RH)).toEqual([BASE, 'bnb-testnet']);
+    expect(remoteCollateralChains(BASE)).toEqual([RH, 'bnb-testnet']);
   });
 
   it('refuses a lock on the note chain itself, or on a chain with no pair', () => {
@@ -325,7 +339,11 @@ describe('cross-chain deployment records', () => {
   });
 
   it('gives the keeper one flush gateway per home chain and a vault check per receipt, by CRE chain name', () => {
-    expect(CRE_CHAIN_NAMES).toEqual({ [RH]: 'robinhood-testnet', [BASE]: 'ethereum-testnet-sepolia-base-1' });
+    expect(CRE_CHAIN_NAMES).toEqual({
+      [RH]: 'robinhood-testnet',
+      [BASE]: 'ethereum-testnet-sepolia-base-1',
+      'bnb-testnet': 'binance_smart_chain-testnet',
+    });
     const xs = [rec(RH, BASE), rec(BASE, RH)];
     expect(xs.flatMap((x) => keeperGateways(x, CRE_CHAIN_NAMES)).map((g) => g.chainSelectorName)).toEqual([
       'robinhood-testnet',

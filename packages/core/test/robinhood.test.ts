@@ -45,10 +45,10 @@ const tokensOf = (p: ProductParams) =>
 
 describe('real tokens on Robinhood Chain', () => {
   it('lists USDG, WETH and the stock tokens on Robinhood Chain testnet, the home chain', () => {
-    expect(NOTE_CHAINS).toEqual(['robinhood-testnet', 'base-sepolia']);
+    expect(NOTE_CHAINS).toEqual(['robinhood-testnet', 'base-sepolia', 'bnb-testnet']);
     expect(HOME_CHAIN).toBe('robinhood-testnet');
-    expect(ISSUANCE_CHAINS).toEqual(['robinhood-testnet', 'base-sepolia']);
-    expect(Object.keys(CHAIN_TOKENS).sort()).toEqual(['base-sepolia', 'robinhood-testnet']);
+    expect(ISSUANCE_CHAINS).toEqual(['robinhood-testnet', 'base-sepolia', 'bnb-testnet']);
+    expect(Object.keys(CHAIN_TOKENS).sort()).toEqual(['base-sepolia', 'bnb-testnet', 'robinhood-testnet']);
     expect(Object.keys(CHAIN_TOKENS['robinhood-testnet']).sort()).toEqual([
       'AMD',
       'AMZN',
@@ -93,6 +93,8 @@ describe('real tokens on Robinhood Chain', () => {
       { symbol: 'PLTR', token: 'PLTR' },
       // Coinbase's B20 stocks exist on Base only (locked there, TSLAc.base, for a Robinhood Chain note).
       ...['TSLAc', 'AMZNc', 'NVDAc', 'AAPLc', 'MSFTc', 'METAc'].map((symbol) => ({ symbol, token: null })),
+      // Binance's bStocks exist on BNB Chain only (stand-ins on its testnet).
+      ...['TSLAB', 'NVDAB', 'AAPLB', 'MSFTB', 'AMZNB', 'GOOGLB', 'METAB'].map((symbol) => ({ symbol, token: null })),
     ]);
     expect(collateralChoices({ collateralChain: 'note' })).toEqual(collateralChoices({}));
     for (const c of collateralChoices({})) if (c.token) expect(isRetiredTestToken(c.token)).toBe(false);
@@ -111,7 +113,7 @@ describe('real tokens on Robinhood Chain', () => {
     expect(validateProductParams(amzn)).toEqual([]);
     for (const chain of ['arbitrum-sepolia', 'nasdaq'])
       expect(validateProductParams({ ...amzn, chain: chain as never }).join(' ')).toMatch(
-        /Notes run on Robinhood Chain testnet and Base Sepolia only/,
+        /Notes run on Robinhood Chain testnet, Base Sepolia and BNB Chain testnet only/,
       );
     expect(validateProductParams({ ...amzn, collateralChain: 'robinhood' }).join(' ')).toMatch(
       /A Robinhood Chain note can't hold collateral on robinhood: pledge it into the note, or lock it on Base Sepolia/,
@@ -249,7 +251,9 @@ describe('term sheets from the earlier Arbitrum build', () => {
   it('reads them but does not issue them as they are', () => {
     expect(isLegacyChainTerms(arb)).toBe(true);
     expect(isLegacyChainTerms(EXAMPLE_PRODUCTS.phoenix)).toBe(false);
-    expect(validateProductParams(arb).join(' ')).toMatch(/Notes run on Robinhood Chain testnet and Base Sepolia only/);
+    expect(validateProductParams(arb).join(' ')).toMatch(
+      /Notes run on Robinhood Chain testnet, Base Sepolia and BNB Chain testnet only/,
+    );
     expect(templateOffered({ product: arb })).toBe(false);
     expect(templateOffered({ product: { ...arb, chain: undefined } })).toBe(false); // remote collateral, not deployed
   });
@@ -278,9 +282,10 @@ describe('term sheets from the earlier Arbitrum build', () => {
 });
 
 describe('collateral on other chains', () => {
-  it('takes only the other note chain, by its chain key', () => {
-    expect(Object.keys(REMOTE_COLLATERAL['robinhood-testnet'])).toEqual(['base-sepolia']);
-    expect(Object.keys(REMOTE_COLLATERAL['base-sepolia'])).toEqual(['robinhood-testnet']);
+  it('takes only the other note chains, by their chain keys', () => {
+    expect(Object.keys(REMOTE_COLLATERAL['robinhood-testnet'])).toEqual(['base-sepolia', 'bnb-testnet']);
+    expect(Object.keys(REMOTE_COLLATERAL['base-sepolia'])).toEqual(['robinhood-testnet', 'bnb-testnet']);
+    expect(Object.keys(REMOTE_COLLATERAL['bnb-testnet'])).toEqual(['robinhood-testnet', 'base-sepolia']);
     expect(isRemoteCollateral({})).toBe(false);
     expect(isRemoteCollateral({ collateralChain: 'note' })).toBe(false);
     expect(isRemoteCollateral({ collateralChain: 'ethereum' })).toBe(true);

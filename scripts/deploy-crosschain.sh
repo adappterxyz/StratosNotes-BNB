@@ -7,6 +7,11 @@
 #   HOME_CHAIN=robinhood-testnet ASSET_CHAIN=base-sepolia bash scripts/deploy-crosschain.sh   # USDC, WETH on Base
 #   HOME_CHAIN=base-sepolia ASSET_CHAIN=robinhood-testnet bash scripts/deploy-crosschain.sh   # USDG, WETH, TSLA, AMZN, AMD, PLTR on Robinhood
 #   REHEARSAL=1 HOME_CHAIN=... ASSET_CHAIN=... bash scripts/deploy-crosschain.sh              # on anvil forks of both chains
+#   REHEARSAL=1 FORKS=1 RPC_...=http://127.0.0.1:.. ...                                       # forks someone else runs
+#
+# A home that already has a gateway (deployments/crosschain/<home>.json) but no vault on ASSET_CHAIN gets one ADDED:
+# the gateway is kept, a vault is deployed on ASSET_CHAIN and wired to it, and the record gains the remote (BNB Chain
+# testnet added behind the Robinhood Chain and Base gateways, scripts/deploy-bnb.sh).
 #
 # Needs deployments/<home>.json with an engine (scripts/deploy-testnets.sh). FEE_POOL (wei, default 0.005 ETH) funds
 # the gateway's release fee pool in the same run; OWNER (default: the deployer) owns gateway and vault and must be the
@@ -20,14 +25,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 export PATH="$HOME/.foundry/bin:$PATH"
-H="${HOME_CHAIN:?set HOME_CHAIN (robinhood-testnet | base-sepolia)}"
-A="${ASSET_CHAIN:?set ASSET_CHAIN (the other note chain)}"
+H="${HOME_CHAIN:?set HOME_CHAIN (robinhood-testnet | base-sepolia | bnb-testnet)}"
+A="${ASSET_CHAIN:?set ASSET_CHAIN (another note chain)}"
 REHEARSAL="${REHEARSAL:-0}"
 FEE_POOL="${FEE_POOL:-5000000000000000}"
 eval "$(npx tsx scripts/xc-plan.ts env "$H" "$A")"
 declare -A RPC=(
   [robinhood-testnet]="${RPC_ROBINHOOD_TESTNET:-https://rpc.testnet.chain.robinhood.com}"
   [base-sepolia]="${RPC_BASE_SEPOLIA:-https://sepolia.base.org}"
+  [bnb-testnet]="${RPC_BNB_TESTNET:-https://bsc-testnet-rpc.publicnode.com}"
 )
 declare -A ID=( [$H]="$HOME_ID" [$A]="$ASSET_ID" )
 
@@ -49,15 +55,25 @@ OUTBASE="deployments"
 [ "$REHEARSAL" = "1" ] && OUTBASE="deployments/local/rehearsal"
 RECORD="$OUTBASE/crosschain/$H.json"
 STEPS="$ROOT/$OUTBASE/xc-steps/$H"
-if [ "$REHEARSAL" != "1" ] && [ -f "$RECORD" ] && [ "${REDEPLOY:-0}" != "1" ]; then
-  echo "$RECORD exists: this home already has a gateway (REDEPLOY=1 deploys a new pair; archive the old record first)"; exit 1
+# The home's gateway so far: this run's own record (a rehearsal's), else the live one. A gateway with a vault on
+# ASSET_CHAIN already is refused unless REDEPLOY=1 (receipts of the old pair would stay redeemable only through the old
+# gateway: keep its record, e.g. under deployments/archive/xc-<n>/); one without gets the vault ADDED (ADD=1).
+BASE_RECORD=""
+for f in "$RECORD" "deployments/crosschain/$H.json"; do [ -f "$f" ] && { BASE_RECORD="$f"; break; }; done
+ADD=0
+if [ -n "$BASE_RECORD" ] && [ "${REDEPLOY:-0}" != "1" ]; then
+  if python3 -c "import json,sys;r=json.load(open('$BASE_RECORD'));sys.exit(0 if any(x['chain']=='$A' for x in r['remotes']) else 1)"; then
+    echo "$BASE_RECORD: the $H gateway already has a vault on $A (REDEPLOY=1 deploys a new pair; archive the old record first)"; exit 1
+  fi
+  ADD=1
 fi
+[ "${REDEPLOY:-0}" = "1" ] && BASE_RECORD=""
 rm -rf "$STEPS"; mkdir -p "$STEPS" "$OUTBASE/crosschain"
 
 PIDS=()
 cleanup() { for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done; }
 trap cleanup EXIT
-if [ "$REHEARSAL" = "1" ]; then
+if [ "$REHEARSAL" = "1" ] && [ "${FORKS:-0}" != "1" ]; then
   port=28700
   for c in "$H" "$A"; do
     port=$((port + 1))
@@ -73,7 +89,10 @@ done
 
 # The home engine: deployments/<home>.json. A rehearsal whose home has none yet (Base before its first deploy) deploys
 # one on the fork first.
-ENGINE="$(python3 -c "import json,os;f='deployments/$H.json';print(json.load(open(f)).get('engine','') if os.path.exists(f) else '')")"
+ENGINE="$(python3 -c "
+import json,os
+for f in ['$OUTBASE/$H.json','deployments/$H.json']:
+    if os.path.exists(f) and json.load(open(f)).get('engine'): print(json.load(open(f))['engine']); break")"
 if [ -z "$ENGINE" ] && [ "$REHEARSAL" = "1" ]; then
   echo "== $H (fork): no engine in deployments/$H.json, deploying one on the fork"
   (cd packages/evm-engine && export DEPLOYER_KEY="$(deployer_key)" && \
@@ -90,7 +109,7 @@ need() { # chain, minimum ETH
   echo "   $1: deployer $DEPLOYER has $bal ETH (needs >= $2)"
   python3 -c "import sys; sys.exit(0 if float('$bal') >= float('$2') else 1)" || { echo "$1: fund the deployer first"; exit 1; }
 }
-need "$H" "$(python3 -c "print($FEE_POOL/1e18 + 0.002)")"
+if [ "$ADD" = "1" ]; then need "$H" 0.002; else need "$H" "$(python3 -c "print($FEE_POOL/1e18 + 0.002)")"; fi
 need "$A" 0.001
 
 # Gas used by the last forge broadcast on chain id $1 (the rehearsal's measurement; the live run's actual cost).
@@ -113,11 +132,22 @@ role() {
   gas_report "${ID[$chain]}" "$name ($chain)"
 }
 
-gw_block="$(cast block-number --rpc-url "${RPC[$H]}")"
-echo "== 1/3 gateway on $H (fee pool $FEE_POOL wei)"
-ENGINE="$ENGINE" OWNER="$OWNER" FEE_POOL="$FEE_POOL" role "$H" gateway
-GATEWAY="$(python3 -c "import json;print(json.load(open('$STEPS/gateway.json'))['gateway'])")"
-echo "   HomeGateway $GATEWAY"
+if [ "$ADD" = "1" ]; then
+  # Keep the home's gateway: its record stands in for the gateway step's output.
+  python3 -c "
+import json;r=json.load(open('$BASE_RECORD'))['home']
+json.dump({'gateway':r['gateway'],'router':r['router'],'feePoolWei':r.get('feePoolWei','0'),'version':r.get('version',2)},open('$STEPS/gateway.json','w'))
+print(r.get('gatewayBlock',0))" > "$STEPS/gw_block"
+  gw_block="$(cat "$STEPS/gw_block")"
+  GATEWAY="$(python3 -c "import json;print(json.load(open('$STEPS/gateway.json'))['gateway'])")"
+  echo "== 1/3 gateway on $H: kept, HomeGateway $GATEWAY ($BASE_RECORD); adding a vault on $A"
+else
+  gw_block="$(cast block-number --rpc-url "${RPC[$H]}")"
+  echo "== 1/3 gateway on $H (fee pool $FEE_POOL wei)"
+  ENGINE="$ENGINE" OWNER="$OWNER" FEE_POOL="$FEE_POOL" role "$H" gateway
+  GATEWAY="$(python3 -c "import json;print(json.load(open('$STEPS/gateway.json'))['gateway'])")"
+  echo "   HomeGateway $GATEWAY"
+fi
 
 v_block="$(cast block-number --rpc-url "${RPC[$A]}")"
 echo "== 2/3 vault on $A"
@@ -129,7 +159,7 @@ echo "== 3/3 wire on $H: receipts ${XC_SYMBOLS//,/, }"
 GATEWAY="$GATEWAY" REMOTE="$A" VAULT="$VAULT" TOKENS="$XC_TOKENS" DECIMALS="$XC_DECIMALS" SYMBOLS="$XC_SYMBOLS" role "$H" wire
 
 echo "{\"gateway\": $gw_block, \"vault\": $v_block}" > "$STEPS/blocks.json"
-npx tsx scripts/xc-plan.ts assemble "$H" "$A" "$STEPS" "$ENGINE" "$OWNER" "$RECORD"
+npx tsx scripts/xc-plan.ts assemble "$H" "$A" "$STEPS" "$ENGINE" "$OWNER" "$RECORD" $BASE_RECORD
 
 # Read back on-chain: the vault answers to the gateway, the gateway to the vault, the pool is funded.
 [ "$(cast call "$VAULT" 'homeGateway()(address)' --rpc-url "${RPC[$A]}" | tr A-F a-f)" = "$(echo "$GATEWAY" | tr A-F a-f)" ] || { echo "vault does not answer to the gateway"; exit 1; }

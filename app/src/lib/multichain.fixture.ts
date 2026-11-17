@@ -15,14 +15,17 @@ export const FIXTURE = {
   'base-sepolia': { engine: hex(0xe2), lens: hex(0xf2), gateway: hex(0xa2), vault: hex(0xb2), receipt: 0xc200 },
 } as const;
 
-const NAMES: Record<NoteChain, string> = {
+/** The chains this fixture serves: the two live note chains (BNB Chain testnet is served once it is deployed). */
+type FixtureChain = Extract<NoteChain, 'robinhood-testnet' | 'base-sepolia'>;
+
+const NAMES: Record<FixtureChain, string> = {
   'robinhood-testnet': 'Robinhood Chain testnet',
   'base-sepolia': 'Base Sepolia',
 };
-const CASH: Record<NoteChain, string> = { 'robinhood-testnet': 'USDG', 'base-sepolia': 'USDC' };
+const CASH: Record<FixtureChain, string> = { 'robinhood-testnet': 'USDG', 'base-sepolia': 'USDC' };
 
 /** The receipts the gateway on `home` mints for tokens locked on `asset` (core's wirePlan), at synthetic addresses. */
-function receipts(home: NoteChain, asset: NoteChain): Record<string, CrossChainReceipt> {
+function receipts(home: FixtureChain, asset: FixtureChain): Record<string, CrossChainReceipt> {
   return Object.fromEntries(
     wirePlan(home, asset).map((w, i) => [
       w.symbol,
@@ -31,7 +34,7 @@ function receipts(home: NoteChain, asset: NoteChain): Record<string, CrossChainR
   );
 }
 
-function chain(key: NoteChain, other: NoteChain, rpc: string): ChainConfig {
+function chain(key: FixtureChain, other: FixtureChain, rpc: string): ChainConfig {
   const r = receipts(key, other);
   return {
     key,

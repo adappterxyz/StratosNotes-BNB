@@ -152,10 +152,13 @@ export function heldOnChoices(
   if (!isNoteChain(homeKey)) return [note];
   return [
     note,
-    ...remoteCollateralChains(homeKey).map((asset) => {
-      const leg = crossChainLeg(config, homeKey, asset);
-      const live = !!leg && Object.keys(leg.receipts).some((sym) => !!home?.tokens?.[sym]);
-      return { key: asset, label: NOTE_CHAIN_SHORT[asset], live };
-    }),
+    // Only chains the served config lists (BNB Chain testnet appears once it is deployed and served).
+    ...remoteCollateralChains(homeKey)
+      .filter((asset) => config.chains.some((c) => c.key === asset))
+      .map((asset) => {
+        const leg = crossChainLeg(config, homeKey, asset);
+        const live = !!leg && Object.keys(leg.receipts).some((sym) => !!home?.tokens?.[sym]);
+        return { key: asset, label: NOTE_CHAIN_SHORT[asset], live };
+      }),
   ];
 }

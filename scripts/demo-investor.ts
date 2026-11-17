@@ -13,7 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { createPublicClient, createWalletClient, http, parseAbi, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { baseSepolia, robinhoodTestnet } from 'viem/chains';
+import { baseSepolia, bscTestnet, robinhoodTestnet } from 'viem/chains';
 import { CASH_TOKENS, decodeEvmDef, dec, evmInput, type NoteChain } from '@sn/core';
 import { engineAbi, flowEngineAbi, lensAbi } from '@sn/sdk';
 
@@ -25,6 +25,7 @@ const CHAIN = (process.env.CHAIN ?? 'robinhood-testnet') as NoteChain;
 const NETS = {
   'robinhood-testnet': { chain: robinhoodTestnet, rpc: 'https://rpc.testnet.chain.robinhood.com' },
   'base-sepolia': { chain: baseSepolia, rpc: 'https://base-sepolia-rpc.publicnode.com' },
+  'bnb-testnet': { chain: bscTestnet, rpc: 'https://bsc-testnet-rpc.publicnode.com' },
 } as const;
 const net = NETS[CHAIN];
 if (!net) throw new Error(`CHAIN: ${Object.keys(NETS).join(' | ')}`);

@@ -1,10 +1,13 @@
 import {
   cashTokenOf,
   chainLabel,
+  collateralChoices,
   COLLATERAL_SYMBOLS,
   DEFAULT_HAIRCUT,
+  joinList,
   MAX_COLLATERAL,
   MAX_GRACE_DAYS,
+  NOTE_CHAIN_SHORT,
   noteChainOf,
   remoteCollateralOf,
   UNPRICED_STOCKS,
@@ -119,9 +122,19 @@ export function CollateralStep({
         <span className="hint">
           {remote
             ? `${lockable ? `${lockable} ` : ''}stay locked in the vault on ${chainLabel(collateralOn)}; Chainlink CCIP tells the note (about 15–25 minutes per message), and the note sends them back there when it lets them go. Nothing is bridged. The collateral recovers up to its value in a default, and the tokens' own issuers can freeze them.`
-            : noteChain === 'base-sepolia'
-              ? "USDC or WETH, pledged into the note on Base. To pledge Robinhood's stock tokens, lock them on Robinhood Chain."
-              : "USDG, WETH or Robinhood's stock tokens (TSLA, AMZN, AMD, PLTR), pledged into the note on Robinhood Chain."}
+            : `${joinList(
+                collateralChoices({ chain: noteChain })
+                  .map((c) => c.token)
+                  .filter((t): t is string => !!t),
+                'or',
+              )}, pledged into the note on ${NOTE_CHAIN_SHORT[noteChain]}.${
+                heldOn.some((h) => h.key !== 'note')
+                  ? ` To pledge another chain's tokens, lock them on ${joinList(
+                      heldOn.filter((h) => h.key !== 'note').map((h) => h.label),
+                      'or',
+                    )}.`
+                  : ''
+              }`}
           {heldOn.some((h) => h.key !== 'note' && !h.live)
             ? ' Locking on the other chain opens once its cross-chain gateway and vault are deployed.'
             : ''}
