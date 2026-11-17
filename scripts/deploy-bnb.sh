@@ -107,6 +107,8 @@ if [ "$REHEARSAL" = "1" ]; then
   echo "   faucet claimAll: nmUSD $(cast call "$CASH" 'balanceOf(address)(uint256)' "$(cast wallet address "$ANVIL_KEY2")" --rpc-url "$RPC_BNB_TESTNET" | cut -d' ' -f1) (6 decimals)"
 fi
 
+rm -f "$ROOT/$OUTBASE/bnb-readback.txt"
+
 echo "== 3/4 cross-chain pairs"
 for pair in "bnb-testnet robinhood-testnet" "bnb-testnet base-sepolia" "robinhood-testnet bnb-testnet" "base-sepolia bnb-testnet"; do
   read -r H A <<<"$pair"

@@ -20,6 +20,16 @@
       "scan": 200,
       "maxProcesses": 50,
       "stateBlock": "latest"
+    },
+    {
+      "chainSelectorName": "binance_smart_chain-testnet",
+      "engine": "0x37184A9D436B9e8F2225cAFd5474E60A5d18FDEb",
+      "lens": "0xF486dfaa1111Dd20B931b304Ec7d0B967463a086",
+      "gasLimit": "8000000",
+      "fromPid": 1,
+      "scan": 200,
+      "maxProcesses": 50,
+      "stateBlock": "latest"
     }
   ],
   "maxReportsPerRun": 5,
@@ -27,6 +37,14 @@
     {
       "chainSelectorName": "ethereum-testnet-sepolia-base-1",
       "gateway": "0x5Daa05c6D9866AEC94D7E73462e09F8bC40C6fcD",
+      "maxItems": 10,
+      "baseGas": "250000",
+      "gasPerItem": "300000",
+      "stateBlock": "latest"
+    },
+    {
+      "chainSelectorName": "binance_smart_chain-testnet",
+      "gateway": "0x63424c1df913a64db697e780c5293e95194489b1",
       "maxItems": 10,
       "baseGas": "250000",
       "gasPerItem": "300000",
@@ -94,6 +112,204 @@
       "vault": "0xd47ef8947b09E1acc6642815c4d6b46E624Adf02",
       "token": "0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0",
       "label": "PLTR.rh",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "ethereum-testnet-sepolia-base-1",
+      "receipt": "0x90E82d3f50CB2FB29d74f979CeDebF5eBC95C8ca",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0x072195d31BECb340506c52B4ac87Aa0a185fE843",
+      "token": "0x199816ce7e0b2366b408D6F8c3158844f06E3099",
+      "label": "nmUSD.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "ethereum-testnet-sepolia-base-1",
+      "receipt": "0x0F8F3e12D33ec2F4D327190CF360419757F8d304",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0x072195d31BECb340506c52B4ac87Aa0a185fE843",
+      "token": "0x5Daa05c6D9866AEC94D7E73462e09F8bC40C6fcD",
+      "label": "TSLAB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "ethereum-testnet-sepolia-base-1",
+      "receipt": "0xd70B4e6aC65EB2463398432CF775d67454DC3208",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0x072195d31BECb340506c52B4ac87Aa0a185fE843",
+      "token": "0xf1Ef65D880e9bcE21252ffbAcbcb5FBC2a0f5B07",
+      "label": "NVDAB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "ethereum-testnet-sepolia-base-1",
+      "receipt": "0x5dc66dDB4eB797D600359fc69F49c05ee951708F",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0x072195d31BECb340506c52B4ac87Aa0a185fE843",
+      "token": "0x23a651EEfB67188C8dAEc683c3e820bF26D47C12",
+      "label": "AAPLB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "ethereum-testnet-sepolia-base-1",
+      "receipt": "0xF1DdC2adD6A80402B004BEF97144E244914E3C60",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0x072195d31BECb340506c52B4ac87Aa0a185fE843",
+      "token": "0x31FAa920215E089A75df0CAd4E45d2f237b59f6C",
+      "label": "MSFTB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "ethereum-testnet-sepolia-base-1",
+      "receipt": "0x159598ee1519b2DE5bCD3CF92b1fD714D98696f3",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0x072195d31BECb340506c52B4ac87Aa0a185fE843",
+      "token": "0xF3D825E904e03c59b720395Ff2641567a94aC81A",
+      "label": "AMZNB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "ethereum-testnet-sepolia-base-1",
+      "receipt": "0xa015ACcB1f9BCf61De9b0Ac785930DBD825E4856",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0x072195d31BECb340506c52B4ac87Aa0a185fE843",
+      "token": "0x379557862668267c486c2EB7B0d3428314e27665",
+      "label": "GOOGLB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "ethereum-testnet-sepolia-base-1",
+      "receipt": "0x4Af11458E4A7e3522667db74430FEe25237C3684",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0x072195d31BECb340506c52B4ac87Aa0a185fE843",
+      "token": "0x1a226DA7F988B38882ba441914A50801635af4Ca",
+      "label": "METAB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0xa8fC62a47f76D9E33c8f031F0fEc66D6dCd79cf1",
+      "assetChain": "robinhood-testnet",
+      "vault": "0x39cdE90739D96103F960059eaffd2c322DD69b84",
+      "token": "0x7E955252E15c84f5768B83c41a71F9eba181802F",
+      "label": "USDG.rh",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0xA658e1C63f208aE5F539979C479D678B5cF0525e",
+      "assetChain": "robinhood-testnet",
+      "vault": "0x39cdE90739D96103F960059eaffd2c322DD69b84",
+      "token": "0x7943e237c7F95DA44E0301572D358911207852Fa",
+      "label": "WETH.rh",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0xE37232356E5DD29bbC13e2EF9e88F1c2C8f2b468",
+      "assetChain": "robinhood-testnet",
+      "vault": "0x39cdE90739D96103F960059eaffd2c322DD69b84",
+      "token": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
+      "label": "TSLA.rh",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x829E915D22F60597BE782a0869fc2BcADbF04690",
+      "assetChain": "robinhood-testnet",
+      "vault": "0x39cdE90739D96103F960059eaffd2c322DD69b84",
+      "token": "0x5884aD2f920c162CFBbACc88C9C51AA75eC09E02",
+      "label": "AMZN.rh",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x7baD6b503e04b7908CC1dbC74D21bB61183DE0D7",
+      "assetChain": "robinhood-testnet",
+      "vault": "0x39cdE90739D96103F960059eaffd2c322DD69b84",
+      "token": "0x71178BAc73cBeb415514eB542a8995b82669778d",
+      "label": "AMD.rh",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x8349c42bA97d2e0B246CF1fAd4182b401409c2aa",
+      "assetChain": "robinhood-testnet",
+      "vault": "0x39cdE90739D96103F960059eaffd2c322DD69b84",
+      "token": "0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0",
+      "label": "PLTR.rh",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x8eEe745a5f5d1C5A65E8faa760CdD28Fce5296D6",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "label": "USDC.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x86fb6DAeF8F32DE988C7567301660b710a35aC6B",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "token": "0x4200000000000000000000000000000000000006",
+      "label": "WETH.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0xcFe7C3a0251Dcf6699A0227C712275cC913Ba9Fe",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "token": "0xA1d0c4af9036f16a92fb26C47502494d393E6aeb",
+      "label": "TSLAc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0xA4B06f082AfE31454cae9304472b384Ac4bb8c25",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "token": "0xC30E1Aa84c2344E0C94A8872e11D630C81339c9B",
+      "label": "AMZNc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x23d555eDc6dB000B4ac78324764360613941697F",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "token": "0xC22886C920E9B51A0F16e11C90B155921E955C9D",
+      "label": "NVDAc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x0f06b2d086b510aAECdB990b9DD2E2f6c839D293",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "token": "0xAd47c568D3e058292f6b0CC130385034C65C5758",
+      "label": "AAPLc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x84163cfD4D7bf2CF1cAd088d3Eaba7BFEa89Bc80",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "token": "0x3c4c95F15F7F6E877bbC8D84f57cE48571a001F1",
+      "label": "MSFTc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "binance_smart_chain-testnet",
+      "receipt": "0x4Aad65DFBBA92C97EBaEa075ef2F818c56470E52",
+      "assetChain": "ethereum-testnet-sepolia-base-1",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "token": "0x5DBB2f20834236926Fe7826156b39a4a86A7d6A5",
+      "label": "METAc.base",
       "stateBlock": "latest"
     },
     {
@@ -166,6 +382,78 @@
       "vault": "0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6",
       "token": "0x5DBB2f20834236926Fe7826156b39a4a86A7d6A5",
       "label": "METAc.base",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0xc131e8D3bA48a75B63bCC91B6e003ff02f09824e",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "token": "0x199816ce7e0b2366b408D6F8c3158844f06E3099",
+      "label": "nmUSD.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0x9A452B729bcb76B411bf38B7814F6C82dcf0Dd38",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "token": "0x5Daa05c6D9866AEC94D7E73462e09F8bC40C6fcD",
+      "label": "TSLAB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0xB85e5190136Fef4175b83a9D7e4B6D4A41489268",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "token": "0xf1Ef65D880e9bcE21252ffbAcbcb5FBC2a0f5B07",
+      "label": "NVDAB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0xA4b771D17066828ca173978109C3c11dd61EF683",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "token": "0x23a651EEfB67188C8dAEc683c3e820bF26D47C12",
+      "label": "AAPLB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0xC53c58c649369A5eed471071388cbBa04E1B551F",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "token": "0x31FAa920215E089A75df0CAd4E45d2f237b59f6C",
+      "label": "MSFTB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0xA4518C56AD4A6769944377B8b0d671FDFa16f002",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "token": "0xF3D825E904e03c59b720395Ff2641567a94aC81A",
+      "label": "AMZNB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0xa6093d490E5BfbC830c48B91D9b6B6BC81A665Cb",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "token": "0x379557862668267c486c2EB7B0d3428314e27665",
+      "label": "GOOGLB.bnb",
+      "stateBlock": "latest"
+    },
+    {
+      "homeChain": "robinhood-testnet",
+      "receipt": "0x1E0F17f69B518a03D5c83a9180d97dA3Ee32A478",
+      "assetChain": "binance_smart_chain-testnet",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "token": "0x1a226DA7F988B38882ba441914A50801635af4Ca",
+      "label": "METAB.bnb",
       "stateBlock": "latest"
     }
   ],

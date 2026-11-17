@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-16T13:55:35.505Z",
+  "generatedAt": "2026-11-17T08:11:14.118Z",
   "deployments": [
     {
       "key": "robinhood-testnet",
@@ -38,6 +38,26 @@
         "AAPLc": "0xAd47c568D3e058292f6b0CC130385034C65C5758",
         "MSFTc": "0x3c4c95F15F7F6E877bbC8D84f57cE48571a001F1",
         "METAc": "0x5DBB2f20834236926Fe7826156b39a4a86A7d6A5"
+      }
+    },
+    {
+      "key": "bnb-testnet",
+      "name": "BNB Chain testnet",
+      "explorer": "https://testnet.bscscan.com",
+      "deployed": true,
+      "engine": "0x37184A9D436B9e8F2225cAFd5474E60A5d18FDEb",
+      "lens": "0xF486dfaa1111Dd20B931b304Ec7d0B967463a086",
+      "forwarder": "0xA238e42cb8782808DBb2F37E19859244ec4779B0",
+      "block": 143220202,
+      "tokens": {
+        "nmUSD": "0x199816ce7e0b2366b408D6F8c3158844f06E3099",
+        "TSLAB": "0x5Daa05c6D9866AEC94D7E73462e09F8bC40C6fcD",
+        "NVDAB": "0xf1Ef65D880e9bcE21252ffbAcbcb5FBC2a0f5B07",
+        "AAPLB": "0x23a651EEfB67188C8dAEc683c3e820bF26D47C12",
+        "MSFTB": "0x31FAa920215E089A75df0CAd4E45d2f237b59f6C",
+        "AMZNB": "0xF3D825E904e03c59b720395Ff2641567a94aC81A",
+        "GOOGLB": "0x379557862668267c486c2EB7B0d3428314e27665",
+        "METAB": "0x1a226DA7F988B38882ba441914A50801635af4Ca"
       }
     }
   ],

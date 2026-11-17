@@ -69,8 +69,67 @@
           "valuedAs": "METAc"
         }
       }
+    },
+    {
+      "chain": "bnb-testnet",
+      "chainId": 97,
+      "selector": "13264668187771770619",
+      "router": "0xE1053aE1857476f36A3C62580FF9b016E8EE8F6f",
+      "vault": "0xC4fc65Eee16b9cDC44c07057D1FFE2771645a545",
+      "vaultBlock": 143220940,
+      "gasLimit": 300000,
+      "receipts": {
+        "nmUSD.bnb": {
+          "receipt": "0xc131e8D3bA48a75B63bCC91B6e003ff02f09824e",
+          "token": "0x199816ce7e0b2366b408D6F8c3158844f06E3099",
+          "decimals": 6,
+          "valuedAs": "USD"
+        },
+        "TSLAB.bnb": {
+          "receipt": "0x9A452B729bcb76B411bf38B7814F6C82dcf0Dd38",
+          "token": "0x5Daa05c6D9866AEC94D7E73462e09F8bC40C6fcD",
+          "decimals": 18,
+          "valuedAs": "TSLAB"
+        },
+        "NVDAB.bnb": {
+          "receipt": "0xB85e5190136Fef4175b83a9D7e4B6D4A41489268",
+          "token": "0xf1Ef65D880e9bcE21252ffbAcbcb5FBC2a0f5B07",
+          "decimals": 18,
+          "valuedAs": "NVDAB"
+        },
+        "AAPLB.bnb": {
+          "receipt": "0xA4b771D17066828ca173978109C3c11dd61EF683",
+          "token": "0x23a651EEfB67188C8dAEc683c3e820bF26D47C12",
+          "decimals": 18,
+          "valuedAs": "AAPLB"
+        },
+        "MSFTB.bnb": {
+          "receipt": "0xC53c58c649369A5eed471071388cbBa04E1B551F",
+          "token": "0x31FAa920215E089A75df0CAd4E45d2f237b59f6C",
+          "decimals": 18,
+          "valuedAs": "MSFTB"
+        },
+        "AMZNB.bnb": {
+          "receipt": "0xA4518C56AD4A6769944377B8b0d671FDFa16f002",
+          "token": "0xF3D825E904e03c59b720395Ff2641567a94aC81A",
+          "decimals": 18,
+          "valuedAs": "AMZNB"
+        },
+        "GOOGLB.bnb": {
+          "receipt": "0xa6093d490E5BfbC830c48B91D9b6B6BC81A665Cb",
+          "token": "0x379557862668267c486c2EB7B0d3428314e27665",
+          "decimals": 18,
+          "valuedAs": "GOOGLB"
+        },
+        "METAB.bnb": {
+          "receipt": "0x1E0F17f69B518a03D5c83a9180d97dA3Ee32A478",
+          "token": "0x1a226DA7F988B38882ba441914A50801635af4Ca",
+          "decimals": 18,
+          "valuedAs": "METAB"
+        }
+      }
     }
   ],
   "owner": "0x298afB9424188C7eA7c01556D8CAE6ff4768de0a",
-  "checkedAt": "2026-11-07"
+  "checkedAt": "2026-11-17"
 }

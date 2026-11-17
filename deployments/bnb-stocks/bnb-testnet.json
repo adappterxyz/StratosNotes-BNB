@@ -1,0 +1,57 @@
+{
+  "cash": "0x199816ce7e0b2366b408D6F8c3158844f06E3099",
+  "chainId": 97,
+  "faucet": "0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6",
+  "owner": "0x298afB9424188C7eA7c01556D8CAE6ff4768de0a",
+  "tokens": {
+    "AAPLB": {
+      "decimals": 18,
+      "mainnetToken": "0x431a3BEE82E2ca41e49895CbECE5bB0F76A89b7A",
+      "multiplier": 1001135424170860199,
+      "multiplierFeed": "0xdFf0853baa3D226dB46Be5CeDF5E085EA5681a50",
+      "token": "0x23a651EEfB67188C8dAEc683c3e820bF26D47C12"
+    },
+    "AMZNB": {
+      "decimals": 18,
+      "mainnetToken": "0x1a4b499833A79A09ad7Cf1D42D7DacF71e92eb00",
+      "multiplier": 1000000000000000000,
+      "multiplierFeed": "0xA97Ef64C0663b36E2d7F0a53399355286Db8b682",
+      "token": "0xF3D825E904e03c59b720395Ff2641567a94aC81A"
+    },
+    "GOOGLB": {
+      "decimals": 18,
+      "mainnetToken": "0x3F53De71c126BdaBAe20f9cD64848d317f6C3238",
+      "multiplier": 1000478058978107511,
+      "multiplierFeed": "0xEb0F67BDCfC42C005b101025be8d96861de77e5F",
+      "token": "0x379557862668267c486c2EB7B0d3428314e27665"
+    },
+    "METAB": {
+      "decimals": 18,
+      "mainnetToken": "0x7425889FE94F9d693E8daefE88BCCed6AcFEf4c0",
+      "multiplier": 1000548290410744950,
+      "multiplierFeed": "0xe309a7A22acfDa92BE048dcca37FBA17800E4C52",
+      "token": "0x1a226DA7F988B38882ba441914A50801635af4Ca"
+    },
+    "MSFTB": {
+      "decimals": 18,
+      "mainnetToken": "0x80106cb3EAD06659A5ad19DF39D9b4733863B9b0",
+      "multiplier": 1001313964833366845,
+      "multiplierFeed": "0x23F3204db957A78cE3E193fCEd3ff023D2ef3068",
+      "token": "0x31FAa920215E089A75df0CAd4E45d2f237b59f6C"
+    },
+    "NVDAB": {
+      "decimals": 18,
+      "mainnetToken": "0x02Fca66C1D1aFB4E2A7884261eB00F63598a7436",
+      "multiplier": 1000778223752807865,
+      "multiplierFeed": "0xD685fAb17186FdED106f2B258e8e637eadc8ad83",
+      "token": "0xf1Ef65D880e9bcE21252ffbAcbcb5FBC2a0f5B07"
+    },
+    "TSLAB": {
+      "decimals": 18,
+      "mainnetToken": "0x5b1910eAaD6450E50f816082Aa078C41F10C292f",
+      "multiplier": 1000000000000000000,
+      "multiplierFeed": "0xb50E2A93437eDac4885295cC022837AFF0dD9df4",
+      "token": "0x5Daa05c6D9866AEC94D7E73462e09F8bC40C6fcD"
+    }
+  }
+}

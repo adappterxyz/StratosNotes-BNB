@@ -57,6 +57,13 @@ export function servedChains(env: Record<string, string | undefined> = {}): Serv
       rpc: env.RPC_BASE_SEPOLIA ?? 'https://base-sepolia-rpc.publicnode.com',
       indexer: { confirmations: 30, maxRange: 5000, pollMs: 2000 },
     },
+    {
+      // BNB Chain testnet: sub-second blocks, fast finality within a few blocks; publicnode caps log ranges.
+      key: 'bnb-testnet',
+      chainId: XC_CHAINS['bnb-testnet'].chainId,
+      rpc: env.RPC_BNB_TESTNET ?? XC_CHAINS['bnb-testnet'].rpc,
+      indexer: { confirmations: 30, maxRange: 5000, pollMs: 2000 },
+    },
   ];
 }
 

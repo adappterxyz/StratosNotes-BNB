@@ -99,20 +99,22 @@ describe("Binance's bStocks on BNB Chain: notes.markets stand-ins on BNB Chain t
     expect(instantiateProduct(bnbTsla).bpmnXml).toMatch(/1 \/ initialLevel \/ mult_TSLA/);
   });
 
-  it('is not offered, served or wired before the BNB deploy', () => {
-    expect(EXTERNAL_TOKENS[BNB]).toEqual({});
-    expect(CASH_TOKENS[BNB]).toBeUndefined();
-    expect(STOCK_TOKEN_FAUCETS[BNB]).toBeUndefined();
-    expect(undeployedTokensOf(bnbTsla).sort()).toEqual(['TSLAB']);
-    expect(validateProductParams(bnbTsla).join(' ')).toMatch(/TSLAB is not deployed yet/);
-    expect(collateralChoices({ chain: BNB }).filter((c) => c.token)).toEqual([]);
-    // The network picker settles in cash and drops what cannot be pledged yet.
-    const moved = toChain({ ...bnbTsla, chain: undefined }, BNB);
-    expect(moved.settlement).toBe('cash');
-    expect(moved.collateral).toEqual([{ symbol: 'USD', haircutPct: 100 }]);
-    // Every pair with BNB Chain waits in pendingPlan.
-    expect(wirePlan(RH, BNB)).toEqual([]);
-    expect(pendingPlan(RH, BNB).map((w) => w.symbol)).toEqual(['nmUSD.bnb', ...BSTOCK_SYMBOLS.map((s) => `${s}.bnb`)]);
+  it('is offered, served and wired now BNB Chain testnet is deployed', () => {
+    for (const s of ['nmUSD', ...BSTOCK_SYMBOLS]) expect(EXTERNAL_TOKENS[BNB][s]).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(CASH_TOKENS[BNB]).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(STOCK_TOKEN_FAUCETS[BNB]).toMatch(/^https:\/\/testnet\.bscscan\.com\/address\/0x/);
+    expect(undeployedTokensOf(bnbTsla)).toEqual([]);
+    expect(validateProductParams(bnbTsla)).toEqual([]);
+    expect(
+      collateralChoices({ chain: BNB })
+        .filter((c) => c.token)
+        .map((c) => c.token),
+    ).toEqual(['nmUSD', ...BSTOCK_SYMBOLS]);
+    // The network picker keeps physical delivery in TSLAB on BNB Chain.
+    expect(toChain({ ...bnbTsla, chain: undefined }, BNB).settlement).toBe('physical');
+    // Every pair with BNB Chain is wired, nothing pending.
+    expect(wirePlan(RH, BNB).map((w) => w.symbol)).toEqual(['nmUSD.bnb', ...BSTOCK_SYMBOLS.map((s) => `${s}.bnb`)]);
+    expect(pendingPlan(RH, BNB)).toEqual([]);
   });
 
   it('lets notes on the other chains lock bStocks on BNB Chain, and BNB notes lock theirs', () => {

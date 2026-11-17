@@ -1,0 +1,14 @@
+{
+  "block": 143220202,
+  "chain": "bnb-testnet",
+  "chainId": 97,
+  "deployedAt": 1794902417,
+  "engine": "0x37184A9D436B9e8F2225cAFd5474E60A5d18FDEb",
+  "forwarder": "0xA238e42cb8782808DBb2F37E19859244ec4779B0",
+  "forwarderMode": "mock",
+  "lens": "0xF486dfaa1111Dd20B931b304Ec7d0B967463a086",
+  "owner": "0x298afB9424188C7eA7c01556D8CAE6ff4768de0a",
+  "requireEmail": true,
+  "verifier": "0xBbAb30Cf49862BAfEb37a405D08949E81045093f",
+  "l1Block": 143220296
+}

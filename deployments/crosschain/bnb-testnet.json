@@ -1,0 +1,123 @@
+{
+  "home": {
+    "chain": "bnb-testnet",
+    "chainId": 97,
+    "selector": "13264668187771770619",
+    "router": "0xE1053aE1857476f36A3C62580FF9b016E8EE8F6f",
+    "engine": "0x37184A9D436B9e8F2225cAFd5474E60A5d18FDEb",
+    "gateway": "0x63424c1df913a64db697e780c5293e95194489b1",
+    "gatewayBlock": 143220600,
+    "version": 2,
+    "feePoolWei": "5000000000000000"
+  },
+  "remotes": [
+    {
+      "chain": "robinhood-testnet",
+      "chainId": 46630,
+      "selector": "2032988798112970440",
+      "router": "0x30D197C6F5bE050D5525dD94d01760FaCdB67e7C",
+      "vault": "0x39cdE90739D96103F960059eaffd2c322DD69b84",
+      "vaultBlock": 154423076,
+      "gasLimit": 300000,
+      "receipts": {
+        "USDG.rh": {
+          "receipt": "0xa8fC62a47f76D9E33c8f031F0fEc66D6dCd79cf1",
+          "token": "0x7E955252E15c84f5768B83c41a71F9eba181802F",
+          "decimals": 6,
+          "valuedAs": "USD"
+        },
+        "WETH.rh": {
+          "receipt": "0xA658e1C63f208aE5F539979C479D678B5cF0525e",
+          "token": "0x7943e237c7F95DA44E0301572D358911207852Fa",
+          "decimals": 18,
+          "valuedAs": "ETH"
+        },
+        "TSLA.rh": {
+          "receipt": "0xE37232356E5DD29bbC13e2EF9e88F1c2C8f2b468",
+          "token": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
+          "decimals": 18,
+          "valuedAs": "TSLA"
+        },
+        "AMZN.rh": {
+          "receipt": "0x829E915D22F60597BE782a0869fc2BcADbF04690",
+          "token": "0x5884aD2f920c162CFBbACc88C9C51AA75eC09E02",
+          "decimals": 18,
+          "valuedAs": "AMZN"
+        },
+        "AMD.rh": {
+          "receipt": "0x7baD6b503e04b7908CC1dbC74D21bB61183DE0D7",
+          "token": "0x71178BAc73cBeb415514eB542a8995b82669778d",
+          "decimals": 18,
+          "valuedAs": "AMD"
+        },
+        "PLTR.rh": {
+          "receipt": "0x8349c42bA97d2e0B246CF1fAd4182b401409c2aa",
+          "token": "0x1FBE1a0e43594b3455993B5dE5Fd0A7A266298d0",
+          "decimals": 18,
+          "valuedAs": "PLTR"
+        }
+      }
+    },
+    {
+      "chain": "base-sepolia",
+      "chainId": 84532,
+      "selector": "10344971235874465080",
+      "router": "0xD3b06cEbF099CE7DA4AcCf578aaebFDBd6e88a93",
+      "vault": "0xA1C0A6c72d07D885e2b91ecaD4AabE758F446C35",
+      "vaultBlock": 59903880,
+      "gasLimit": 300000,
+      "receipts": {
+        "USDC.base": {
+          "receipt": "0x8eEe745a5f5d1C5A65E8faa760CdD28Fce5296D6",
+          "token": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+          "decimals": 6,
+          "valuedAs": "USD"
+        },
+        "WETH.base": {
+          "receipt": "0x86fb6DAeF8F32DE988C7567301660b710a35aC6B",
+          "token": "0x4200000000000000000000000000000000000006",
+          "decimals": 18,
+          "valuedAs": "ETH"
+        },
+        "TSLAc.base": {
+          "receipt": "0xcFe7C3a0251Dcf6699A0227C712275cC913Ba9Fe",
+          "token": "0xA1d0c4af9036f16a92fb26C47502494d393E6aeb",
+          "decimals": 8,
+          "valuedAs": "TSLAc"
+        },
+        "AMZNc.base": {
+          "receipt": "0xA4B06f082AfE31454cae9304472b384Ac4bb8c25",
+          "token": "0xC30E1Aa84c2344E0C94A8872e11D630C81339c9B",
+          "decimals": 8,
+          "valuedAs": "AMZNc"
+        },
+        "NVDAc.base": {
+          "receipt": "0x23d555eDc6dB000B4ac78324764360613941697F",
+          "token": "0xC22886C920E9B51A0F16e11C90B155921E955C9D",
+          "decimals": 8,
+          "valuedAs": "NVDAc"
+        },
+        "AAPLc.base": {
+          "receipt": "0x0f06b2d086b510aAECdB990b9DD2E2f6c839D293",
+          "token": "0xAd47c568D3e058292f6b0CC130385034C65C5758",
+          "decimals": 8,
+          "valuedAs": "AAPLc"
+        },
+        "MSFTc.base": {
+          "receipt": "0x84163cfD4D7bf2CF1cAd088d3Eaba7BFEa89Bc80",
+          "token": "0x3c4c95F15F7F6E877bbC8D84f57cE48571a001F1",
+          "decimals": 8,
+          "valuedAs": "MSFTc"
+        },
+        "METAc.base": {
+          "receipt": "0x4Aad65DFBBA92C97EBaEa075ef2F818c56470E52",
+          "token": "0x5DBB2f20834236926Fe7826156b39a4a86A7d6A5",
+          "decimals": 8,
+          "valuedAs": "METAc"
+        }
+      }
+    }
+  ],
+  "owner": "0x298afB9424188C7eA7c01556D8CAE6ff4768de0a",
+  "checkedAt": "2026-11-17"
+}

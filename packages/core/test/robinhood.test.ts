@@ -69,6 +69,7 @@ describe('real tokens on Robinhood Chain', () => {
     expect(CASH_TOKENS).toEqual({
       'robinhood-testnet': '0x7E955252E15c84f5768B83c41a71F9eba181802F',
       'base-sepolia': '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+      'bnb-testnet': '0x199816ce7e0b2366b408D6F8c3158844f06E3099',
     });
     expect(UNPRICED_STOCKS).toEqual(['NFLX']);
   });

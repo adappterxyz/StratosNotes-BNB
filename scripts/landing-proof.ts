@@ -1,6 +1,6 @@
 /**
  * Fill the landing page's proof data from facts on disk, never from typed-in numbers:
- *   - deployments/<chain>.json   the contracts on each note chain, Robinhood Chain testnet and Base Sepolia (written by
+ *   - deployments/<chain>.json   the contracts on each note chain, Robinhood Chain testnet, Base Sepolia and BNB Chain testnet (written by
  *                                scripts/deploy-testnets.sh); a missing file or the placeholder before a fresh deploy
  *                                has no `engine`: `deployed: false`
  *   - docs/evidence.json         optional: real testnet runs (note, transactions, payouts), added after a run on a note
@@ -22,6 +22,11 @@ const CHAINS = [
     key: 'base-sepolia',
     name: 'Base Sepolia',
     explorer: 'https://sepolia.basescan.org',
+  },
+  {
+    key: 'bnb-testnet',
+    name: 'BNB Chain testnet',
+    explorer: 'https://testnet.bscscan.com',
   },
 ];
 
