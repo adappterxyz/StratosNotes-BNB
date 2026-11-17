@@ -14,7 +14,7 @@ const ISSUE_URL = '/app/issue';
 export const BEAT_COPY: ReadonlyArray<{ k: string; t: string; n?: string }> = [
   { k: 'Issue', t: 'Collateral goes in. Locked.' },
   { k: 'Subscribe', t: 'Cash in, notes out. One transaction.' },
-  { k: 'Observe', t: 'Chainlink sets the strike and checks every date.' },
+  { k: 'Observe', t: 'Chainlink sets the start price and checks every date.' },
   { k: 'Pay', t: 'Coupons land on schedule.' },
   {
     k: 'Held to maturity',

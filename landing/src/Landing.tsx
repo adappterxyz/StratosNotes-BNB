@@ -119,7 +119,7 @@ export default function Landing() {
           <SideTabs side={side} onChange={setSide} idPrefix="tab" controls="notes-panel" />
           <p className="side-sub" aria-live="polite">
             {side === 'Investors'
-              ? 'Terms set before you buy. You can lose money.'
+              ? 'A note pays a set coupon while a price stays above a line. Terms set before you buy. You can lose money.'
               : 'Lock collateral. Raise stablecoins. Pay coupons as they fall due.'}
           </p>
         </div>

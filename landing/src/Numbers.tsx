@@ -1,6 +1,6 @@
 /**
  * A band of figures under the hero. The first four describe the product and come from packages/core; the rest are
- * live, counted from /api/notes, and appear only once the API has answered with at least one note.
+ * live, counted from /api/notes, and appear only once at least MIN_LIVE_NOTES notes have been issued.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -33,6 +33,8 @@ const STATIC: Array<[number, string]> = [
   [collateralTokens, 'collateral tokens'],
   [routes, 'cross-chain routes'],
 ];
+
+const MIN_LIVE_NOTES = 10;
 
 /** Counts up to `to` once, when first seen; shows the final value at once with reduced motion or no JS. */
 function Count({ to, run }: { to: number; run: boolean }) {
@@ -92,7 +94,8 @@ export default function Numbers() {
         if (!d.next) break;
         next = d.next;
       }
-      if (off || !rows.length) return;
+      // Shown once there is something to show: a couple of test notes read as an empty room.
+      if (off || rows.length < MIN_LIVE_NOTES) return;
       const coupons = rows.reduce(
         (n, x) => n + (x.view?.economics?.periods ?? []).filter((p) => p.status === 'paid').length,
         0,

@@ -208,6 +208,9 @@ export class NoteScene {
   private collateral!: Group;
   private bands: Mesh[] = [];
   private sheetLabels: Sprite[] = [];
+  /** Small names (start, issuer, investors) that stay out of the hero, where they sit behind the copy. */
+  private introLabels: Sprite[] = [];
+  private crowdMat!: MeshBasicMaterial;
   private collLabel!: Sprite;
   private collLabelReleased!: Sprite;
   private collEdges!: LineSegments;
@@ -268,7 +271,7 @@ export class NoteScene {
     const sheets: Array<[number, number, string, number]> = [
       [LEVEL(1.0), C.ink, 'EARLY REPAYMENT 100%', 0.05],
       [LEVEL(0.7), C.amber, 'COUPON FLOOR 70%', 0.04],
-      [LEVEL(0.6), C.red, 'KNOCK-IN 60%', 0.05],
+      [LEVEL(0.6), C.red, 'BARRIER 60%', 0.05],
     ];
     for (const [y, color, text, op] of sheets) {
       const plane = new Mesh(
@@ -332,10 +335,11 @@ export class NoteScene {
       const y = pathY(X0);
       const stem = new BufferGeometry().setFromPoints([new Vector3(X0, FLOOR_Y, 0), new Vector3(X0, y, 0)]);
       this.strikeMark.add(new Line(stem, new LineBasicMaterial({ color: C.lineStrong })));
-      const l = label('STRIKE', hex(C.muted), 0.55);
+      const l = label('START', hex(C.muted), 0.55);
       l.position.set(X0 - 1.4, FLOOR_Y - 0.9, 0.6);
       this.strikeMark.add(l);
-      this.strikeCre = label('CRE · STRIKE FIXED', hex(C.blue), 0.48, 600);
+      this.introLabels.push(l);
+      this.strikeCre = label('CHAINLINK · START PRICE SET', hex(C.blue), 0.48, 600);
       this.strikeCre.position.set(X0 - 2.2, y + 1.6, 0);
       (this.strikeCre.material as SpriteMaterial).opacity = 0;
       this.strikeMark.add(this.strikeCre);
@@ -376,7 +380,7 @@ export class NoteScene {
       hexMark.position.set(x, y + 2.1, 0);
       const l = label(k === OBS_X.length - 1 ? 'MATURITY' : `OBSERVATION ${k + 1}`, hex(C.muted), 0.5);
       l.position.set(x - 1.6, FLOOR_Y - 0.9, 0.6);
-      const cre = label('CHAINLINK CRE', hex(C.blue), 0.42, 600);
+      const cre = label('CHAINLINK', hex(C.blue), 0.42, 600);
       cre.position.set(x - 1.9, y + 3.35, 0);
       (cre.material as SpriteMaterial).opacity = 0;
       s.add(stem, ring, pulse, hexMark, l, cre);
@@ -437,19 +441,25 @@ export class NoteScene {
       this.collateral.position.set(ISSUER.x, FLOOR_Y + 1.6, ISSUER.z);
       this.collLabel = label('COLLATERAL · LOCKED', hex(C.text), 0.6);
       this.collLabel.position.set(ISSUER.x - 2.8, FLOOR_Y + 4.1, ISSUER.z + 2.2);
-      this.collLabelReleased = label('CRE · COLLATERAL RELEASED', hex(C.signalInk), 0.6);
+      this.collLabelReleased = label('CHAINLINK · COLLATERAL RELEASED', hex(C.signalInk), 0.6);
       this.collLabelReleased.position.copy(this.collLabel.position);
       const issuerLbl = label('ISSUER', hex(C.muted), 0.55);
       issuerLbl.position.set(ISSUER.x - 2.8, FLOOR_Y - 0.9, ISSUER.z + 2.3);
-      this.marginCre = label('CRE · MARGIN CHECKED', hex(C.blue), 0.5, 600);
+      this.marginCre = label('CHAINLINK · MARGIN CHECKED', hex(C.blue), 0.5, 600);
       this.marginCre.position.set(ISSUER.x - 2.8, FLOOR_Y + 5.0, ISSUER.z + 2.2);
       (this.marginCre.material as SpriteMaterial).opacity = 0;
+      this.introLabels.push(issuerLbl);
       s.add(this.collateral, this.collLabel, this.collLabelReleased, issuerLbl, this.marginCre);
     }
 
     // Investors: a small crowd at the front left.
     {
-      const crowd = new InstancedMesh(new SphereGeometry(0.28, 12, 10), new MeshBasicMaterial({ color: C.text }), 14);
+      const crowd = new InstancedMesh(
+        new SphereGeometry(0.28, 12, 10),
+        new MeshBasicMaterial({ color: C.text, transparent: true }),
+        14,
+      );
+      this.crowdMat = crowd.material as MeshBasicMaterial;
       for (let i = 0; i < 14; i++) {
         const a = i * 2.39996,
           r = 0.55 * Math.sqrt(i + 0.5);
@@ -459,6 +469,7 @@ export class NoteScene {
       }
       const l = label('INVESTORS', hex(C.muted), 0.55);
       l.position.set(INVESTORS.x - 2.4, FLOOR_Y - 0.9, INVESTORS.z + 2.6);
+      this.introLabels.push(l);
       s.add(crowd, l);
     }
 
@@ -504,7 +515,7 @@ export class NoteScene {
       this.principal.count = n;
       s.add(this.principal);
       this.principalTag = label('PRINCIPAL BACK', hex(C.signalInk), 0.62, 600);
-      this.principalTag.position.set(12.4, FLOOR_Y + 3.1, HOLDERS_Z + 0.6);
+      this.principalTag.position.set(12.4, FLOOR_Y + 4.3, HOLDERS_Z + 0.6);
       (this.principalTag.material as SpriteMaterial).opacity = 0;
       s.add(this.principalTag);
     }
@@ -526,7 +537,7 @@ export class NoteScene {
       this.branch = new Mesh(this.branchGeo, new MeshBasicMaterial({ color: C.red }));
       this.branch.visible = false;
       s.add(this.branch);
-      this.knockTag = label('CRE · KNOCKED IN, BELOW 60%', hex(C.red), 0.6, 600);
+      this.knockTag = label('CHAINLINK · BELOW THE BARRIER', hex(C.red), 0.6, 600);
       this.knockTag.position.set(x1 - 3.5, yEnd - 1.2, 1.2);
       (this.knockTag.material as SpriteMaterial).opacity = 0;
       s.add(this.knockTag);
@@ -554,8 +565,8 @@ export class NoteScene {
       }
       this.tsla.count = n;
       s.add(this.tsla);
-      this.tslaTag = label('HOLDERS REPAID FINAL ÷ STRIKE', hex(C.text), 0.58, 600);
-      this.tslaTag.position.set(9.5, FLOOR_Y + 3.0, HOLDERS_Z + 0.8);
+      this.tslaTag = label('HOLDERS REPAID AT THE FINAL PRICE', hex(C.text), 0.58, 600);
+      this.tslaTag.position.set(11.5, FLOOR_Y + 3.4, HOLDERS_Z + 0.8);
       (this.tslaTag.material as SpriteMaterial).opacity = 0;
       s.add(this.tslaTag);
     }
@@ -662,6 +673,9 @@ export class NoteScene {
     // only part of the sheets, and a half-seen label reads as a mistake.
     const levels = smooth(span(p, 0.36, 0.44));
     for (const l of this.sheetLabels) (l.material as SpriteMaterial).opacity = levels;
+    const intro = smooth(span(p, 0.06, 0.13));
+    for (const l of this.introLabels) (l.material as SpriteMaterial).opacity = intro;
+    this.crowdMat.opacity = intro;
     // 1. Issue: the lock bands close around the collateral.
     const lock = smooth(span(p, 0.14, 0.24));
     const release = smooth(span(p, 0.86, 0.97));
@@ -675,7 +689,7 @@ export class NoteScene {
     });
     this.collateral.position.y = FLOOR_Y + 1.6 + release * 1.4;
     (this.collEdges.material as LineBasicMaterial).color.setHex(release > 0.5 ? C.signal : C.ink);
-    (this.collLabel.material as SpriteMaterial).opacity = 1 - release;
+    (this.collLabel.material as SpriteMaterial).opacity = intro * (1 - release);
     (this.collLabelReleased.material as SpriteMaterial).opacity = release;
 
     // 2. Subscribe: atomic settlement. Each wave of USDG (investors -> issuer) and of note units (issuer ->
@@ -768,8 +782,10 @@ export class NoteScene {
       this.coins.setMatrixAt(i, this.tmp.matrix);
     }
     this.coins.instanceMatrix.needsUpdate = true;
+    // Each 'coupon paid' shows as its coins land, then steps back: the holders' rail keeps the tally.
     for (const c of this.couponTags)
-      (c.s.material as SpriteMaterial).opacity = smooth(clamp((pathT - c.at - 0.02) / 0.05));
+      (c.s.material as SpriteMaterial).opacity =
+        smooth(clamp((pathT - c.at - 0.02) / 0.05)) * (1 - smooth(clamp((pathT - c.at - 0.16) / 0.06)));
     (this.strikeCre.material as SpriteMaterial).opacity =
       smooth(clamp(pathT / 0.03)) * (1 - smooth(span(p, 0.86, 0.9)));
     (this.marginCre.material as SpriteMaterial).opacity =
@@ -836,6 +852,12 @@ export class NoteScene {
     }
     this.principal.instanceMatrix.needsUpdate = true;
     (this.principalTag.material as SpriteMaterial).opacity = a * (1 - b);
+    // In the first ending the price finishes in range: the two lower lines and the coupon tags step back, so
+    // 'principal back' reads alone. The barrier returns for the second ending.
+    this.sheetLabels.forEach((l, i) => {
+      if (i > 0) (l.material as SpriteMaterial).opacity *= 1 - Math.max(a * (1 - b), deliver);
+    });
+    for (const c of this.couponTags) (c.s.material as SpriteMaterial).opacity *= 1 - a;
     // B: the price falls through the knock-in at maturity: a red branch, then the reduced cash repayment to the holders.
     this.branchGeo.setDrawRange(0, Math.floor(b * this.branchSegs) * this.pathRadial * 6);
     this.branch.visible = b > 0.001;

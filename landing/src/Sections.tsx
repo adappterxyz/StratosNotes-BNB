@@ -14,13 +14,13 @@ export function WhyOnchain() {
       "The issuer's balance sheet",
       'The issuer, backed by collateral pledged to the note at the ratio shown',
     ],
-    ['Where fixings come from', "The issuer's own calculation agent", 'Public Chainlink price feeds'],
+    ['Where prices come from', "The issuer's own calculation agent", 'Public Chainlink price feeds'],
     [
       "When you're paid",
       'Days later, through a custodian',
       'On the payment date once funded; claim any time, with a receipt',
     ],
-    ['What you can check', 'A PDF term sheet', 'Every term, fixing and payment'],
+    ['What you can check', 'A PDF term sheet', 'Every term, price and payment'],
     ['Who can take part', 'Private-bank clients, six-figure tickets', 'Testnet: any wallet with a verified email'],
   ];
   return (
@@ -62,7 +62,7 @@ export function WhyOnchain() {
   );
 }
 
-/* ---- Outcomes: three tabs, each with a chart drawn to scale (100% strike / autocall, 65% knock-in). ---- */
+/* ---- Outcomes: three tabs, each with a chart drawn to scale (100% start price and early repayment, 60% barrier). ---- */
 const W = 600,
   H = 260;
 const y = (pct: number) => 15 + ((125 - pct) * (H - 30)) / 85;
@@ -83,7 +83,7 @@ const ENDINGS: Ending[] = [
     tab: 'Called early',
     tag: 'Ending 1 · Called early',
     h: 'Called early: principal plus the coupon.',
-    p: "The underlying closes at or above the autocall level on an observation date. You receive your principal and that period's coupon, and the note closes.",
+    p: "The underlying closes at or above its start price on a check date. You receive your principal and that period's coupon, and the note closes.",
     path: [
       [30, 100],
       [70, 97],
@@ -107,7 +107,7 @@ const ENDINGS: Ending[] = [
     tab: 'Held to maturity',
     tag: 'Ending 2 · Held to maturity',
     h: 'Held to maturity: every coupon, then principal.',
-    p: 'The underlying stays between the barrier and the autocall level. A coupon is due on every observation, and principal is due in full at maturity.',
+    p: 'The underlying stays between the barrier and its start price. A coupon is due on every check date, and principal is due in full at maturity.',
     path: [
       [30, 100],
       [90, 93],
@@ -135,28 +135,28 @@ const ENDINGS: Ending[] = [
     tab: 'Barrier breached',
     tag: 'Ending 3 · Barrier breached',
     h: "The risk you're paid the coupon to take.",
-    p: 'The underlying closes below the knock-in barrier and finishes below strike. Coupons already paid are yours; principal is returned as the underlying, or its value, at the final price.',
+    p: 'The underlying closes below the barrier and finishes below its start price. Coupons already paid are yours; principal is returned as the underlying, or its value, at the final price.',
     path: [
       [30, 100],
       [90, 94],
       [150, 88],
       [210, 75],
-      [270, 60],
-      [330, 66],
+      [270, 55],
+      [330, 64],
       [390, 72],
       [450, 68],
       [510, 76],
     ],
     marks: [
       { x: 150, pct: 88, kind: 'pay' },
-      { x: 270, pct: 60, kind: 'ki' },
+      { x: 270, pct: 55, kind: 'ki' },
       { x: 390, pct: 72, kind: 'pay' },
       { x: 510, pct: 76, kind: 'end' },
     ],
     legend: [
       { kind: 'pay', t: 'Coupon paid' },
       { kind: 'ki', t: 'Barrier breached' },
-      { kind: 'end', t: 'Ends below strike' },
+      { kind: 'end', t: 'Ends below start price' },
     ],
   },
 ];
@@ -184,7 +184,7 @@ function OutcomeChart({ e }: { e: Ending }) {
             <line key={x} x1={x} x2={x} y1={10} y2={H - 10} className="oc-obs" />
           ))}
           <line x1={20} x2={W - 10} y1={y(100)} y2={y(100)} className="oc-strike" />
-          <line x1={20} x2={W - 10} y1={y(65)} y2={y(65)} className="oc-ki" />
+          <line x1={20} x2={W - 10} y1={y(60)} y2={y(60)} className="oc-ki" />
           <polyline points={e.path.map(([x, p]) => `${x},${y(p)}`).join(' ')} className="oc-path" />
           {e.marks.map((m) =>
             m.kind === 'ki' ? (
@@ -201,20 +201,20 @@ function OutcomeChart({ e }: { e: Ending }) {
           )}
         </svg>
         <span className="oc-axis" style={{ top: `${(y(100) / H) * 100}%` }}>
-          Strike / autocall 100%
+          Early repayment 100%
         </span>
-        <span className="oc-axis ki" style={{ top: `${(y(65) / H) * 100}%` }}>
-          Knock-in 65%
+        <span className="oc-axis ki" style={{ top: `${(y(60) / H) * 100}%` }}>
+          Barrier 60%
         </span>
       </div>
       <ul className="oc-legend">
         <li className="ax" aria-hidden="true">
           <i className="oc-sw" />
-          Strike / autocall 100%
+          Early repayment 100%
         </li>
         <li className="ax" aria-hidden="true">
           <i className="oc-sw ki" />
-          Knock-in 65%
+          Barrier 60%
         </li>
         {e.legend.map((l) => (
           <li key={l.t}>
@@ -298,7 +298,7 @@ export function ForIssuers() {
   const cards = [
     ['Launch in minutes', 'Pick a template. The term sheet writes itself.'],
     ['Fund against collateral', 'Lock tokens, raise stablecoins, keep your view.'],
-    ['Automated operations', 'Chainlink runs every fixing and payment.'],
+    ['Automated operations', 'Chainlink runs every price check and payment.'],
     ['Onchain distribution', 'Any verified wallet can subscribe, on three chains.'],
   ];
   return (
@@ -333,27 +333,27 @@ export function Faq() {
   const qa: Array<[string, string]> = [
     [
       'What happens if the issuer disappears?',
-      "Each note shows its collateral ratio. If the issuer misses a payment, Chainlink CRE triggers a default and holders are paid what they're owed from the pledged collateral, up to its value. If the collateral is worth less than what's owed, holders take the shortfall. You can inspect the collateral onchain at any time.",
+      "Each note shows its collateral ratio. If the issuer misses a payment, Chainlink declares a default and holders are paid from the pledged collateral, up to its value. If that is less than what's owed, holders take the shortfall.",
     ],
     [
       'Where do the prices come from?',
-      'Chainlink price feeds. The same source that fixes the strike decides every barrier, coupon and redemption.',
+      'Chainlink price feeds. The same feed sets the start price and decides every coupon and repayment.',
     ],
     [
       'Can I lose money?',
-      'Yes, some or all of it. If the barrier is breached and the underlying ends below strike, principal comes back as the underlying, or its value, at the final price. If the issuer defaults, you are limited to the pledged collateral. Coupons already paid are yours to keep.',
+      'Yes, some or all of it. If the price ends below the barrier, your principal falls with it. If the issuer defaults, you are limited to the pledged collateral. Coupons already paid are yours.',
     ],
     [
       'What if the collateral is on another chain?',
-      "A note on any of the three chains can be backed by tokens locked in a vault on either of the others: a Base note by Robinhood's stock tokens locked on Robinhood Chain, a Robinhood Chain note by USDC locked on Base, and so on. Chainlink CCIP tells the note about the lock, and on a default or at maturity sends the release back; each message takes about 20 minutes. Chainlink CRE checks every run that the vault still holds what the note counts. The token issuers can still pause or freeze their tokens, and the contracts are not audited.",
+      'It stays there, locked in a vault. Chainlink CCIP tells the note about the lock and sends the release back at the end; each message takes about 20 minutes. Token issuers can still pause or freeze their tokens, and the contracts are not audited.',
     ],
     [
       'Can I exit before maturity?',
-      "There's no secondary market and no buyback. You can transfer your notes to another verified address, and a note ends early if it autocalls.",
+      "There's no secondary market and no buyback. You can transfer your notes to another verified address, and a note ends early if it is repaid early.",
     ],
     [
       'Who can invest?',
-      'During testnet, anyone with a verified email, using test tokens with no value. Any live offering will apply eligibility and jurisdiction rules, and may not be open to you.',
+      'On testnet, anyone with a verified email, using test tokens with no value. A live offering will apply eligibility and jurisdiction rules.',
     ],
   ];
   return (

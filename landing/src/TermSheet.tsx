@@ -98,8 +98,8 @@ function rowsOf(v: NoteView, now: number): { rows: Row[]; next: string | null } 
       `${pct(p.couponRatePct * (YEAR / s.periodSec))} p.a.${s.demo ? ' (est.)' : ` · ${p.productType === 'snowball' ? 'paid at redemption' : every(s.periodSec)}`}`,
     ]);
   rows.push(['Tenor', term(s.termSec, s.demo)]);
-  if (p.autocallLevelPct) rows.push(['Autocall level', `${p.autocallLevelPct}% of strike`]);
-  if (p.knockInBarrierPct) rows.push(['Knock-in barrier', `${p.knockInBarrierPct}% of strike`]);
+  if (p.autocallLevelPct) rows.push(['Early repayment (autocall)', `${p.autocallLevelPct}% of start price`]);
+  if (p.knockInBarrierPct) rows.push(['Barrier (knock-in)', `${p.knockInBarrierPct}% of start price`]);
   const col = v.economics?.collateral ?? [];
   if (col.length) {
     const ratio = v.economics?.ratio;
@@ -160,28 +160,30 @@ export default function TermSheet() {
 
   if (!note) {
     const rows: Row[] = [
-      ['Coupon', 'Fixed by the issuer, % p.a.'],
-      ['Tenor', 'Set by the issuer'],
-      ['Autocall level', '% of strike'],
-      ['Knock-in barrier', '% of strike'],
-      ['Collateral pledged', 'Amount, token and ratio'],
+      ['Coupon', '12% p.a. · quarterly'],
+      ['Tenor', '12 months'],
+      ['Early repayment (autocall)', '100% of start price'],
+      ['Coupon floor', '70% of start price'],
+      ['Barrier (knock-in)', '60% of start price'],
+      ['Collateral pledged', '120 TSLA · 150% ratio'],
     ];
     return (
-      <article className="ts-card" aria-label="Term sheet, illustrative">
+      <article className="ts-card" aria-label="Term sheet, example">
         <div className="ts-top">
-          <span className="ts-label">Term sheet · Illustrative</span>
+          <span className="ts-label">Term sheet · Example</span>
+          <span className="ts-pill">Not an offer</span>
         </div>
-        <h3>Fixed Coupon Note</h3>
+        <h3>12M Phoenix on TSLA</h3>
         <dl className="ts-rows">
           {rows.map(([k, v]) => (
             <div key={k}>
               <dt>{k}</dt>
-              <dd className="ts-ill">{v}</dd>
+              <dd className="num">{v}</dd>
             </div>
           ))}
         </dl>
         <div className="ts-foot">
-          <span>Next observation · on the note's schedule</span>
+          <span>Example terms. Every live note shows its own.</span>
           <a href="/app/">Browse live notes →</a>
         </div>
       </article>

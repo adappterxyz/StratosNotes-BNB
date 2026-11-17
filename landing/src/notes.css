@@ -410,10 +410,10 @@ header.nav.open {
   z-index: -1;
   background: linear-gradient(
     to right,
-    rgba(255, 255, 255, 0.97) 0%,
-    rgba(255, 255, 255, 0.92) 32%,
-    rgba(255, 255, 255, 0.5) 48%,
-    rgba(255, 255, 255, 0) 62%
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.98) 40%,
+    rgba(255, 255, 255, 0.6) 52%,
+    rgba(255, 255, 255, 0) 66%
   );
 }
 @media (max-aspect-ratio: 1/1) {
@@ -3243,4 +3243,24 @@ h2 {
 .tk-sym img {
   width: 30px;
   height: 30px;
+}
+
+/* ---- Spacing pass: two white sections in a row no longer stack two full paddings. ---- */
+.sn-root .notes-sec {
+  padding-bottom: 48px;
+}
+.sn-root #live.ts-sec {
+  padding-top: 72px;
+  padding-bottom: 96px;
+}
+.sn-root #issuers {
+  padding-bottom: 40px;
+}
+.sn-root #faq {
+  padding-top: 72px;
+  padding-bottom: 32px;
+}
+.sn-root #cta {
+  padding-top: 72px;
+  padding-bottom: 88px;
 }
