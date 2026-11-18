@@ -3332,3 +3332,30 @@ h2 {
 .numbers .ticker {
   margin-top: 56px;
 }
+
+/* ---- Soft snap on phones and small windows: a section's top catches under the header when a scroll stops
+   near it. Sections keep their natural height and scroll freely inside. ---- */
+@media (prefers-reduced-motion: no-preference) and ((max-width: 959.98px) or (max-height: 699.98px)) {
+  html:has(.sn-root .snap) {
+    scroll-snap-type: y proximity;
+  }
+  .sn-root .stage,
+  .sn-root .snap {
+    scroll-snap-align: start;
+  }
+  /* Land each section's first line just under the sticky header (69px), whatever its own top padding. */
+  .sn-root .snap {
+    scroll-margin-top: 84px;
+  }
+  .sn-root .numbers.snap {
+    scroll-margin-top: 48px;
+  }
+  .sn-root #why.snap,
+  .sn-root #issuers.snap,
+  .sn-root #faq.snap {
+    scroll-margin-top: 16px;
+  }
+  .sn-root #live.snap {
+    scroll-margin-top: 0;
+  }
+}
