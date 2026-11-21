@@ -8,7 +8,16 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { isAddress } from 'viem';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Radio, ShieldCheck, WalletCards } from 'lucide-react';
-import { dec, defToBpmn, FEED_CHAIN_LABELS, instantiateProduct, isNoteChain, NOTE_CHAIN_SHORT, SCALE } from '@sn/core';
+import {
+  dec,
+  defToBpmn,
+  FEED_CHAIN_LABELS,
+  instantiateProduct,
+  isNoteChain,
+  NOTE_CHAIN_SHORT,
+  SCALE,
+  stockTokenNotes,
+} from '@sn/core';
 import { CASH_ASSET, NOTE_ASSET, noteView, PHASE_LABEL, positionOf, type NoteView } from '@sn/sdk';
 import { useNarrow } from '../lib/useNarrow';
 import TasksPanel from '../components/TasksPanel';
@@ -324,6 +333,12 @@ export default function OfferingPage() {
                   </span>
                 </p>
               </div>
+              {o.hasTerms &&
+                stockTokenNotes(o.params).map((n) => (
+                  <p key={n.key} className="xs muted" data-stock-note={n.key}>
+                    {n.text}
+                  </p>
+                ))}
               <BarrierBar
                 p={o.params}
                 marks={marks}

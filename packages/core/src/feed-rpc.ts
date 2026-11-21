@@ -87,15 +87,78 @@ export type FeedReading =
 
 /**
  * The JSON-RPC batch body for `feeds` (addresses): ids 2i = latestRoundData, 2i+1 = decimals of feeds[i], at a
- * block tag or a 0x-hex block number.
+ * block tag or a 0x-hex block number; then, for each of `tokens` (stock tokens), its four corporate-action reads.
  */
-export function feedBatchBody(feeds: readonly string[], blockTag: FeedBlockTag | string): string {
-  return JSON.stringify(
-    feeds.flatMap((to, i) => [
+export function feedBatchBody(
+  feeds: readonly string[],
+  blockTag: FeedBlockTag | string,
+  tokens: readonly string[] = [],
+): string {
+  const base = 2 * feeds.length;
+  return JSON.stringify([
+    ...feeds.flatMap((to, i) => [
       { jsonrpc: '2.0', id: 2 * i, method: 'eth_call', params: [{ to, data: SELECTOR_LATEST_ROUND }, blockTag] },
       { jsonrpc: '2.0', id: 2 * i + 1, method: 'eth_call', params: [{ to, data: SELECTOR_DECIMALS }, blockTag] },
     ]),
-  );
+    // Stock tokens (Robinhood's, ERC-8056): ids base + 4j + k, k in TOKEN_SELECTORS order.
+    ...tokens.flatMap((to, j) =>
+      TOKEN_SELECTORS.map((data, k) => ({
+        jsonrpc: '2.0',
+        id: base + 4 * j + k,
+        method: 'eth_call',
+        params: [{ to, data }, blockTag],
+      })),
+    ),
+  ]);
+}
+
+/** uiMultiplier(), newUIMultiplier(), effectiveAt(), oraclePaused(): a stock token's corporate-action state. */
+export const TOKEN_SELECTORS = ['0xa60bf13d', '0xdc767007', '0x97a4064f', '0x7706ba52'] as const;
+
+/**
+ * A stock token's corporate-action state as decimal strings (consensus-safe), or why it could not be read:
+ * the multiplier in effect (shares per token, 18 decimals), the one scheduled (equal to it when none is), when the
+ * last or next change takes effect (unix seconds, 0 = never changed), and the issuer's advisory oracle pause.
+ */
+export type TokenReading =
+  { multiplier: string; pending: string; effectiveAt: string; paused: boolean } | { error: string };
+
+/**
+ * Decode the token part of a feedBatchBody reply: `nFeeds` feeds came first, then `tokens` in order. A missing or
+ * failed call fails only its token, with the same text on every node.
+ */
+export function decodeTokenBatch(body: string, nFeeds: number, tokens: readonly string[]): TokenReading[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return tokens.map(() => ({ error: 'token RPC: reply is not JSON' }));
+  }
+  if (!Array.isArray(parsed)) return tokens.map(() => ({ error: 'token RPC: batch refused' }));
+  const byId = new Map<number, { result?: unknown; error?: { code?: number } }>();
+  for (const r of parsed as Array<{ id?: unknown; result?: unknown; error?: { code?: number } }>) {
+    if (r && typeof r.id === 'number') byId.set(r.id, r);
+  }
+  const base = 2 * nFeeds;
+  return tokens.map((_, j) => {
+    const words: bigint[] = [];
+    for (let k = 0; k < 4; k++) {
+      const r = byId.get(base + 4 * j + k);
+      if (!r) return { error: 'token RPC: no reply' };
+      if (r.error)
+        return { error: `token RPC: eth_call failed${r.error.code !== undefined ? ` (code ${r.error.code})` : ''}` };
+      if (typeof r.result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(r.result)) {
+        return { error: 'token RPC: malformed result (not a stock token?)' };
+      }
+      words.push(BigInt(r.result));
+    }
+    return {
+      multiplier: words[0].toString(),
+      pending: words[1].toString(),
+      effectiveAt: words[2].toString(),
+      paused: words[3] !== 0n,
+    };
+  });
 }
 
 const word = (hex: string, i: number): bigint => BigInt('0x' + (hex.slice(2 + 64 * i, 2 + 64 * (i + 1)) || '0'));

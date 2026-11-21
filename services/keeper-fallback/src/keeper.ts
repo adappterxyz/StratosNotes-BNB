@@ -9,7 +9,19 @@
  * the CRE workflow reads over HTTP (Robinhood Chain mainnet, HTTP_FEED_CHAINS) is read here at the same block
  * rule: `lagBlocks` below the head, since its public RPC does not keep the finalized block's state.
  */
-import { checkRound, routeFeed, type DueReport, type FeedReadAt, type FeedRef, type FeedRoutes } from '@sn/core';
+import {
+  checkRound,
+  corporateActionHold,
+  isRhMultiplierRef,
+  rhTokenOfFeed,
+  routeFeed,
+  tokenMultiplier,
+  type DueReport,
+  type FeedReadAt,
+  type FeedRef,
+  type FeedRoutes,
+  type TokenReading,
+} from '@sn/core';
 import { engineAbi, feedAbi, readDue, reportHex } from '@sn/sdk';
 import type { Account, Address, Chain, PublicClient, Transport, WalletClient } from 'viem';
 
@@ -34,6 +46,13 @@ export interface FallbackConfig {
   log: (line: string) => void;
 }
 
+const stockTokenAbi = [
+  { type: 'function', name: 'uiMultiplier', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'newUIMultiplier', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'effectiveAt', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'oraclePaused', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
+] as const;
+
 export async function readFeed(cfg: FallbackConfig, f: FeedRef, nowSec: number): Promise<bigint> {
   const client = cfg.feedClients[f.feedChain];
   if (!client) throw new Error(`no RPC for feed chain ${f.feedChain}`);
@@ -42,6 +61,34 @@ export async function readFeed(cfg: FallbackConfig, f: FeedRef, nowSec: number):
     at?.lagBlocks !== undefined
       ? { blockNumber: (await client.getBlockNumber()) - BigInt(at.lagBlocks) }
       : { blockTag: at?.blockTag ?? (cfg.blockTag === 'latest' ? ('latest' as const) : ('finalized' as const)) };
+  // As the CRE keeper: a Robinhood stock token's multiplier is its uiMultiplier(), and both it and the stock's price
+  // wait while the issuer processes a corporate action on the token (corporateActionHold).
+  const tokenState = async (token: Address): Promise<TokenReading> => {
+    const read = (functionName: 'uiMultiplier' | 'newUIMultiplier' | 'effectiveAt' | 'oraclePaused') =>
+      client.readContract({ address: token, abi: stockTokenAbi, functionName, ...block });
+    try {
+      const [multiplier, pending, effectiveAt, paused] = await Promise.all([
+        read('uiMultiplier'),
+        read('newUIMultiplier'),
+        read('effectiveAt'),
+        read('oraclePaused'),
+      ]);
+      return {
+        multiplier: String(multiplier),
+        pending: String(pending),
+        effectiveAt: String(effectiveAt),
+        paused: paused === true,
+      };
+    } catch {
+      return { error: 'token RPC: eth_call failed' };
+    }
+  };
+  if (isRhMultiplierRef(f)) return tokenMultiplier(await tokenState(f.feed as Address), nowSec);
+  const token = rhTokenOfFeed(f);
+  if (token) {
+    const hold = corporateActionHold(await tokenState(token as Address), nowSec);
+    if (hold) throw new Error(`${f.field}: ${hold}`);
+  }
   const [roundId, answer, , updatedAt, answeredInRound] = await client.readContract({
     address: f.feed as Address,
     abi: feedAbi,

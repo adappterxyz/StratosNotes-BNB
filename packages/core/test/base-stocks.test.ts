@@ -19,6 +19,8 @@ import {
   isB20Symbol,
   pendingPlan,
   RECEIPTS,
+  RH_STOCK_TOKENS,
+  RH_TOKEN_CHAIN,
   simulateNote,
   STOCK_TOKEN_FAUCETS,
   toChain,
@@ -79,7 +81,7 @@ describe('Coinbase B20 stocks on Base: notes.markets stand-ins on Base Sepolia',
     expect(FEED_CHAIN_LABELS[BASE_MAINNET_FEED_CHAIN]).toBe('Base');
   });
 
-  it('compiles a Base TSLA note delivering shares / multiplier in TSLAc, its collateral valued per token', () => {
+  it("compiles a Base TSLA note delivering shares in TSLAc at both tokens' multipliers, its collateral valued per token", () => {
     const prod = instantiateProduct(baseTsla);
     expect(prod.assets.find((a) => a.id === 'd_TSLA')).toMatchObject({ token: 'TSLAc', decimals: 8 });
     expect(prod.assets.find((a) => a.id === 'col_TSLAc')).toMatchObject({ name: 'Collateral TSLAc', decimals: 8 });
@@ -91,15 +93,24 @@ describe('Coinbase B20 stocks on Base: notes.markets stand-ins on Base Sepolia',
     // The multiplier is read at the final observation only, from the Base Sepolia multiplier feed.
     expect(xml).toContain('mult_TSLA');
     expect(xml).toContain(BASE_SEPOLIA_FEED_CHAIN);
-    expect(xml).toMatch(/1 \/ initialLevel \/ mult_TSLA/);
+    // The strike is a price of Robinhood's token: 1 / strike Robinhood tokens x Robinhood's multiplier = shares.
+    expect(xml).toMatch(/1 \/ initialLevel \* rmult_TSLA \/ mult_TSLA/);
+    expect(xml).toContain(RH_STOCK_TOKENS.TSLA);
     const c = compileTemplate({ product: baseTsla });
-    const multField = c.def.fields.findIndex((f) => f.name === 'mult_TSLA');
-    expect(multField).toBeGreaterThanOrEqual(0);
-    const capturing = c.def.steps.filter((s) => s.captures.some((x) => x.field === multField)).map((s) => s.id);
-    expect(capturing).toEqual([`Task_Observe${baseTsla.observations}`]);
+    for (const name of ['mult_TSLA', 'rmult_TSLA']) {
+      const f = c.def.fields.findIndex((x) => x.name === name);
+      expect(f).toBeGreaterThanOrEqual(0);
+      const capturing = c.def.steps.filter((s) => s.captures.some((x) => x.field === f)).map((s) => s.id);
+      expect(capturing).toEqual([`Task_Observe${baseTsla.observations}`]);
+    }
+    expect(deliverableToken(baseTsla, 'TSLA')?.reference).toMatchObject({
+      field: 'rmult_TSLA',
+      feed: { feed: RH_STOCK_TOKENS.TSLA, feedChain: RH_TOKEN_CHAIN },
+    });
     // A Robinhood Chain note on TSLA delivers Robinhood's token 1:1: no multiplier.
     const rh = instantiateProduct({ ...baseTsla, chain: undefined, collateral: [{ symbol: 'TSLA', haircutPct: 60 }] });
     expect(rh.bpmnXml).not.toContain('mult_TSLA');
+    expect(deliverableToken({ chain: undefined }, 'TSLA')?.reference).toBeUndefined();
     expect(rh.bpmnXml).toMatch(/1 \/ initialLevel"|1 \/ initialLevel</);
   });
 
@@ -111,8 +122,8 @@ describe('Coinbase B20 stocks on Base: notes.markets stand-ins on Base Sepolia',
       settlement: 'physical',
     };
     const xml = instantiateProduct(basket).bpmnXml;
-    expect(xml).toContain('1 / initialLevel_TSLA / mult_TSLA');
-    expect(xml).toContain('1 / initialLevel_NVDA / mult_NVDA');
+    expect(xml).toContain('1 / initialLevel_TSLA * rmult_TSLA / mult_TSLA');
+    expect(xml).toContain('1 / initialLevel_NVDA * rmult_NVDA / mult_NVDA');
     // ETH is delivered as WETH, 1:1.
     expect(xml).toMatch(/1 \/ initialLevel_ETH["<]/);
     expect(deliverableToken(basket, 'NVDA')).toMatchObject({ token: 'NVDAc', multiplier: { field: 'mult_NVDA' } });
@@ -127,6 +138,34 @@ describe('Coinbase B20 stocks on Base: notes.markets stand-ins on Base Sepolia',
       worstAtMaturity: { symbol: 'TSLA', strike: 250, multiplier: 1.25 },
     });
     expect(r.perUnit.deliver.TSLA).toBeCloseTo(1 / 250 / 1.25, 12);
+  });
+
+  it('a split or a dividend on either token leaves the shares delivered unchanged', () => {
+    const deliver = (strike: number, refMultiplier: number, multiplier: number) =>
+      simulateNote(baseTsla, {
+        perfs: [0.9, 0.95, 0.8, 0.5],
+        sold: 1000,
+        ratio: 0,
+        collateral: [],
+        worstAtMaturity: { symbol: 'TSLA', strike, refMultiplier, multiplier },
+      }).perUnit.deliver.TSLA;
+    // Struck at 400 a Robinhood token, one share each: 1/400 share per unit of face, in TSLAc at 1 share each.
+    const before = deliver(400, 1, 1);
+    expect(before).toBeCloseTo(1 / 400, 12);
+    // A 2:1 split on both tokens: each is 2 shares, the same number of tokens is the same value.
+    expect(deliver(400, 2, 2)).toBeCloseTo(before, 12);
+    // Only Robinhood has applied it yet (or only it reinvests a dividend): its token is 2 shares, TSLAc still 1.
+    expect(deliver(400, 2, 1)).toBeCloseTo(2 * before, 12);
+    // Shares delivered = tokens x TSLAc's multiplier = shares owed (1 / strike Robinhood tokens x its multiplier).
+    for (const [r, m] of [
+      [1, 1],
+      [2, 2],
+      [2, 1],
+      [1.0017, 1.0005],
+      [0.1, 0.1],
+    ]) {
+      expect(deliver(400, r, m) * m).toBeCloseTo((1 / 400) * r, 12);
+    }
   });
 
   it('is offered, served and wired now the stand-ins are deployed on Base Sepolia', () => {

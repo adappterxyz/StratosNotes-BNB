@@ -95,7 +95,8 @@ const deliveries = (chain: NoteChain) =>
 function pricedBy(t: ChainToken): string {
   if (t.valuedAs === 'USD') return 'Counted at $1';
   if (t.b20) return `Chainlink ${t.token}/USD (per-token feed on Base)`;
-  if (t.bstock) return `Chainlink ${t.bstock.delivers}/USD × the token's multiplier`;
+  if (t.bstock)
+    return `Chainlink ${t.bstock.delivers}/USD (Robinhood's token) ÷ its multiplier × this token's multiplier`;
   const f = t.valuedAs ? FEEDS[t.valuedAs as keyof typeof FEEDS] : undefined;
   return f ? `Chainlink ${t.valuedAs}/USD (${FEED_CHAIN_LABELS[f.feedChain] ?? f.feedChain})` : 'No price feed';
 }
@@ -402,6 +403,19 @@ export default function Support() {
                   Robinhood's own faucet
                 </a>
                 .
+              </li>
+              <li>
+                <b>bStock prices.</b> bStock collateral is valued from the stock's Chainlink price and the token's
+                multiplier, not from the bStock's own market price. The two can differ, mostly when the US market is
+                closed. Chainlink publishes no price for a bStock itself.
+              </li>
+              <li>
+                <b>Splits and dividends.</b> No stock token changes your balance in a split. Each has a multiplier, the
+                shares one token stands for, which the issuer raises on a split or a reinvested dividend. Chainlink's
+                stock prices here are of Robinhood's tokens with that multiplier included, so a split does not move a
+                note's start price or barrier. A note that pays in Coinbase's or Binance's token reads both multipliers
+                at the final check, so you receive the shares owed. A price check waits while an issuer is applying a
+                split or dividend. Mergers, delistings and spin-offs are not handled yet.
               </li>
               <li>
                 <b>Not accepted.</b> {UNPRICED_STOCKS.join(', ')} on Robinhood Chain has no Chainlink price the keeper

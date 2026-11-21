@@ -11,6 +11,7 @@
  */
 import type { WorkflowDef } from './def-types';
 import { evalExpr } from './eval';
+import type { TokenReading } from './feed-rpc';
 
 const KIND_SERVICE = 3,
   KIND_RECEIVE = 4,
@@ -186,4 +187,35 @@ export function checkRound(
   const age = nowSec - Number(round.updatedAt);
   if (age > staleness + allowanceSec) throw new Error(`stale round (age ${age}s, max ${staleness + allowanceSec}s)`);
   return feedToFixed(round.answer, decimals);
+}
+
+/**
+ * Seconds around a multiplier change during which a stock observation waits. Robinhood pauses the token's oracle
+ * while it applies a corporate action, but the flag is advisory and the price and the multiplier do not switch in
+ * one transaction: an hour either side of the effective time keeps a report from mixing the old one with the new.
+ */
+export const CORPORATE_ACTION_WINDOW = 3600;
+
+/**
+ * Why a stock price (or its token's multiplier) must not be used now, or null when it may: the issuer has paused
+ * the token's oracle, or a multiplier change takes (or took) effect within CORPORATE_ACTION_WINDOW. The report
+ * waits and the keeper retries every run; nothing is lost, the observation is taken once the action is through.
+ */
+export function corporateActionHold(t: TokenReading, nowSec: number): string | null {
+  if ('error' in t) return t.error;
+  if (t.paused) return 'oracle paused by the token issuer (corporate action)';
+  const at = Number(t.effectiveAt);
+  if (at > 0 && Math.abs(nowSec - at) < CORPORATE_ACTION_WINDOW) {
+    return `multiplier change ${nowSec < at ? 'takes' : 'took'} effect at ${at} (corporate action window)`;
+  }
+  return null;
+}
+
+/** A stock token's multiplier in effect (18 decimals) as engine fixed point; throws while corporateActionHold. */
+export function tokenMultiplier(t: TokenReading, nowSec: number): bigint {
+  const hold = corporateActionHold(t, nowSec);
+  if (hold) throw new Error(hold);
+  const m = BigInt((t as { multiplier: string }).multiplier);
+  if (m <= 0n) throw new Error('non-positive multiplier');
+  return feedToFixed(m, 18);
 }

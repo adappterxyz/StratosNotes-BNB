@@ -48,6 +48,7 @@ import {
   cashTokenOf,
   collateralFeed,
   collateralMultiplierFeed,
+  collateralRefMultiplierFeed,
   collateralTokenOf,
   deliverableToken,
   economicsOf,
@@ -88,9 +89,13 @@ export const colAsset = (c: CollateralSymbol) => `col_${c}`;
 export const pledgeField = (c: CollateralSymbol) => `pledge_${c}`;
 export const haircutField = (c: CollateralSymbol) => `haircut_${c}`;
 export const priceField = (c: CollateralSymbol) => `px_${c}`;
-/** A bStock key's two readings: its share's price and its multiplier (px_ = their product). */
+/**
+ * A bStock key's readings: Chainlink's price of Robinhood's token for its stock, the bStock's multiplier and
+ * Robinhood's (px_ = price x multiplier / Robinhood's multiplier: the share price x the bStock's shares per token).
+ */
 export const sharePriceField = (c: CollateralSymbol) => `pxs_${c}`;
 export const priceMultField = (c: CollateralSymbol) => `pxm_${c}`;
+export const priceRefField = (c: CollateralSymbol) => `pxr_${c}`;
 export const topUpField = (c: CollateralSymbol) => `topUp_${c}`;
 export const deliverAsset = (sym: string) => `d_${sym}`;
 
@@ -153,36 +158,46 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
   // Collateral prices ride on the same CRE reports as the observations (USD needs none). Each key has its own feed:
   // TSLA (Robinhood's token) the share's, TSLAc (a B20 stock) Chainlink's per-token feed on Base (collateralFeed).
   const priced = col.filter((c) => c.symbol !== 'USD');
-  // A bStock (TSLAB…) has no per-token feed: its price is the share's (shareField) x its multiplier (multField), both
-  // read here, multiplied by a formula field under the same px_ name, so coverage and defaults read it like any other.
+  // A bStock (TSLAB…) has no per-token feed. Its stock's feed is the price of Robinhood's token (share price x
+  // Robinhood's multiplier), so the bStock is worth feed x its own multiplier / Robinhood's: all three read here and
+  // combined by a formula field under the same px_ name, so coverage and defaults read it like any other. Multiplying
+  // first keeps the division's truncation on the low side (never over-valued).
   const priceFields = () =>
     priced.flatMap((c) => {
       const m = collateralMultiplierFeed(c.symbol);
       if (!m) return [oracleField(priceField(c.symbol), collateralFeed(c.symbol)!)];
+      const r = collateralRefMultiplierFeed(c.symbol);
       return [
         oracleField(sharePriceField(c.symbol), collateralFeed(c.symbol)!),
         oracleField(priceMultField(c.symbol), m),
+        ...(r ? [oracleField(priceRefField(c.symbol), r)] : []),
         field(priceField(c.symbol), 'Decimal', {
-          formula: `${sharePriceField(c.symbol)} * ${priceMultField(c.symbol)}`,
+          formula: `${sharePriceField(c.symbol)} * ${priceMultField(c.symbol)}${r ? ` / ${priceRefField(c.symbol)}` : ''}`,
         }),
       ];
     });
-  // Physical delivery in a B20 stock (TSLAc for TSLA on Base): the shares owed are paid at shares / multiplier token
-  // units, the multiplier read at the final observation (B20MultiplierFeed). Other tokens are 1:1 with the underlying.
+  // Physical delivery in another issuer's stock token (a B20 stock on Base, a bStock on BNB Chain). The strike is a
+  // price of ROBINHOOD's token (every stock feed is), so 1 / strike is a number of Robinhood tokens: it is turned
+  // into shares with Robinhood's multiplier (the reference) and into the delivered token with that token's own, both
+  // read at the final observation. A split or a reinvested dividend on either side then cancels out
+  // (docs/CORPORATE-ACTIONS.md). Robinhood's own token, and WETH, are 1:1 with the underlying.
   const multipliers = physical
     ? unds.flatMap((u) => {
-        const m = deliverableToken(p, u.symbol)?.multiplier;
-        return m ? [{ sym: u.symbol, ...m }] : [];
+        const d = deliverableToken(p, u.symbol);
+        return d?.multiplier ? [{ sym: u.symbol, ...d.multiplier, reference: d.reference }] : [];
       })
     : [];
-  const multOf = (sym: string) => multipliers.find((m) => m.sym === sym)?.field;
+  const multOf = (sym: string) => multipliers.find((m) => m.sym === sym);
   /**
-   * Tokens delivered per unit of face for underlying `sym`: the shares owed (1 / strike) divided by the token's
-   * multiplier for a B20 stock. The engine truncates each division (10 decimals), so this is never above the exact
-   * value: the funding check and the delivery use the same expression, so what is funded is exactly what is
-   * delivered, and a holder is short by under 2e-10 token per unit of face at most (docs/BASE-STOCKS.md).
+   * Tokens delivered per unit of face for underlying `sym`: 1 / strike x Robinhood's multiplier / the token's.
+   * The engine truncates each operation (10 decimals), so this is never above the exact value: the funding check
+   * and the delivery use the same expression, so what is funded is exactly what is delivered, and a holder is short
+   * by under 4e-10 token per unit of face at most (docs/BASE-STOCKS.md).
    */
-  const perUnitDelivery = (sym: string, strike: string) => `1 / ${strike}${multOf(sym) ? ` / ${multOf(sym)}` : ''}`;
+  const perUnitDelivery = (sym: string, strike: string) => {
+    const m = multOf(sym);
+    return `1 / ${strike}${m?.reference ? ` * ${m.reference.field}` : ''}${m ? ` / ${m.field}` : ''}`;
+  };
   /** Coverage now: escrowed collateral x price x haircut, in stablecoin. */
   const coverageExpr =
     col
@@ -207,7 +222,12 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
         ]
       : [oracleField(`obs${k}`, unds[0])]),
     ...priceFields(),
-    ...(k === n ? multipliers.map((m) => oracleField(m.field, m.feed)) : []),
+    ...(k === n
+      ? multipliers.flatMap((m) => [
+          oracleField(m.field, m.feed),
+          ...(m.reference ? [oracleField(m.reference.field, m.reference.feed)] : []),
+        ])
+      : []),
     field('coverage', 'Decimal', { formula: coverageExpr }),
     field('payDate', 'Date', { formula: `obsDate${k} + lag` }),
   ];

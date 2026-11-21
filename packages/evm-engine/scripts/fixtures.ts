@@ -47,6 +47,12 @@ interface Run {
   split?: boolean;
   /** B20 multipliers at maturity, by underlying (a physically settled Base note delivers shares / multiplier). */
   multiplier?: Record<string, number>;
+  /**
+   * Robinhood's multipliers, by underlying (default 1): every stock price is of Robinhood's token, so a delivery in
+   * another issuer's token pays 1 / strike x this / that token's multiplier, and a bStock is worth feed x its
+   * multiplier / this (docs/CORPORATE-ACTIONS.md).
+   */
+  refMultiplier?: Record<string, number>;
 }
 const seed = (part: string) => SEED_TEMPLATES.find(t => t.name.includes(part))!.source;
 const ETH_BTC: ProductParams = { ...EXAMPLE_PRODUCTS.fcn, name: '12M Worst-of FCN on ETH, BTC', underlyings: [FEEDS.ETH, FEEDS.BTC] };
@@ -108,6 +114,14 @@ const RUNS: Run[] = [
   { type: 'fcn', params: MIXED_COLLATERAL, label: 'mixed collateral, misses coupon 2 -> default (capped)', path: [90, 95, 80, 50], investors: [600, 400], colPath: { ETH: [100, 100, 100, 100, 100] }, pledgeCover: 1.2, behaviour: { missPayment: 2 } },
   // The same under 'all-to-holders': both collateral assets go to the holders in kind, pro rata.
   { type: 'fcn', params: { ...MIXED_COLLATERAL, defaultRule: 'all-to-holders' }, label: 'mixed collateral, misses coupon 2 -> default (all to holders)', path: [90, 95, 80, 50], investors: [600, 400], colPath: { ETH: [100, 100, 100, 100, 100] }, pledgeCover: 1.2, behaviour: { missPayment: 2 } },
+  // ---- Corporate actions (docs/CORPORATE-ACTIONS.md): before the BNB and Base runs, which are read from the end. ---
+  // A 2:1 split applied by both issuers: Robinhood's token and the bStock are 2 shares each. Delivery is unchanged
+  // (units / strike), and the TSLAB collateral is worth what it was (feed x 2 / 2).
+  { type: 'fcn', params: BNB_TSLA, label: 'bStock delivery after a 2:1 split on both tokens', path: [90, 95, 80, 50], investors: [700, 300], colPath: { TSLAB: [100, 100, 100, 100, 100] }, pledgeCover: 1.1, multiplier: { TSLA: 2 }, refMultiplier: { TSLA: 2 } },
+  // The same split, the note defaulting: the collateral the holders take is valued share x the bStock's multiplier.
+  { type: 'fcn', params: BNB_TSLA, label: 'bStock collateral after a split, misses coupon 2 -> default', path: [90, 95, 80, 50], investors: [600, 400], colPath: { TSLAB: [100, 90, 80, 80, 80] }, pledgeCover: 1.5, behaviour: { missPayment: 2 }, multiplier: { TSLA: 2 }, refMultiplier: { TSLA: 2 } },
+  // Base: Robinhood's token is 2 shares (split applied), Coinbase's 1.25: 1 / strike x 2 / 1.25 TSLAc per unit.
+  { type: 'fcn', params: BASE_TSLA, label: 'B20 delivery, Robinhood multiplier 2', path: [90, 95, 80, 50], investors: [700, 300], colPath: { TSLAc: [100, 100, 100, 100, 100] }, pledgeCover: 1.1, multiplier: { TSLA: MULT_TSLA }, refMultiplier: { TSLA: 2 } },
   // ---- BNB Chain bStocks (docs/BNB-CHAIN.md): before the Base runs, which BaseStocks.t.sol reads as the last two. --
   // Knocked in at maturity: units / strike / multiplier TSLAB to each holder; the TSLAB collateral released.
   { type: 'fcn', params: BNB_TSLA, label: 'bStock delivery', path: [90, 95, 80, 50], investors: [700, 300], colPath: { TSLAB: [100, 100, 100, 100, 100] }, pledgeCover: 1.1, multiplier: { TSLA: MULT_TSLA } },
@@ -219,7 +233,7 @@ function fixture(run: Run, idx: number) {
   }
   const ref = simulateNote(run.refParams ?? p, {
     perfs, sold, ratio,
-    worstAtMaturity: p.settlement === 'physical' ? { symbol: unds[worst].symbol, strike: strikes[worst], multiplier: run.multiplier?.[unds[worst].symbol] } : undefined,
+    worstAtMaturity: p.settlement === 'physical' ? { symbol: unds[worst].symbol, strike: strikes[worst], multiplier: run.multiplier?.[unds[worst].symbol], refMultiplier: run.refMultiplier?.[unds[worst].symbol] } : undefined,
     collateral: pledged.map(x => ({ symbol: x.symbol, amount: x.amount, haircut: x.haircut, prices: Array.from({ length: n + 1 }, (_, k) => colPx(x.symbol, k)) })),
     behaviour: behaviour.marginCall ? { ...behaviour, marginCall: { period: behaviour.marginCall.period, ...(behaviour.marginCall.topUp ? { topUp: topUps } : {}) } } : behaviour,
     feePerCoupon: run.paFee ? notional / 1000 : undefined,
@@ -255,11 +269,18 @@ function fixture(run: Run, idx: number) {
       if (!share) out[`px_${x.symbol}`] = colPx(x.symbol, k);
       else {
         const m = run.multiplier?.[share] ?? 1;
-        out[`pxs_${x.symbol}`] = colPx(x.symbol, k) / m;
+        const r = run.refMultiplier?.[share] ?? 1;
+        // The feed is the price of Robinhood's token: the bStock's value / its multiplier x Robinhood's.
+        out[`pxs_${x.symbol}`] = (colPx(x.symbol, k) / m) * r;
         out[`pxm_${x.symbol}`] = m;
+        out[`pxr_${x.symbol}`] = r;
       }
     }
-    if (k === n) for (const [sym, m] of Object.entries(run.multiplier ?? {})) out[`mult_${sym}`] = m;
+    if (k === n)
+      for (const [sym, m] of Object.entries(run.multiplier ?? {})) {
+        out[`mult_${sym}`] = m;
+        out[`rmult_${sym}`] = run.refMultiplier?.[sym] ?? 1;
+      }
     return out;
   };
   const issuerStep = (t: number, step: string, token: number, base: bigint, amountFixed: bigint): Action =>

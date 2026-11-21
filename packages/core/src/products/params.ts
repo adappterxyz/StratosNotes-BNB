@@ -50,6 +50,7 @@ import {
   type BStockSymbol,
 } from './bnb-stocks';
 import { ASSET_CLASSES } from './feed-directory';
+import { isRhStockTicker, refMultiplierField, rhMultiplierFeed } from './robinhood-tokens';
 import { FEED_CATALOGUE, type CatalogueFeed, type CatalogueSymbol } from './feeds-catalogue';
 
 export type { AssetClass, CatalogueChain } from './feed-directory';
@@ -601,7 +602,19 @@ export function economicsOf(p: ProductParams) {
 export function deliverableToken(
   p: Pick<ProductParams, 'chain'>,
   symbol: string,
-): { token: string; decimals: number; multiplier?: { field: string; feed: FeedSpec } } | undefined {
+):
+  | {
+      token: string;
+      decimals: number;
+      multiplier?: { field: string; feed: FeedSpec };
+      /**
+       * Set with `multiplier`: the multiplier of the token the underlying's PRICE is of (Robinhood's, whose feed
+       * every stock underlying reads: share price x that multiplier). 1 / strike is a number of Robinhood tokens;
+       * another issuer's token is delivered at 1 / strike x reference / multiplier (robinhood-tokens.ts).
+       */
+      reference?: { field: string; feed: FeedSpec };
+    }
+  | undefined {
   if (symbol === 'USD') return undefined;
   const chain = noteChainOf(p);
   const local = deliveryTokenFor(chain, symbol);
@@ -616,6 +629,9 @@ export function deliverableToken(
     token: local.token,
     decimals: local.decimals,
     ...(feed ? { multiplier: { field: multiplierField(symbol), feed } } : {}),
+    ...(feed && isRhStockTicker(symbol)
+      ? { reference: { field: refMultiplierField(symbol), feed: rhMultiplierFeed(symbol) } }
+      : {}),
   };
 }
 
@@ -652,6 +668,17 @@ export function collateralFeed(c: CollateralSymbol): FeedSpec | undefined {
  */
 export function collateralMultiplierFeed(c: CollateralSymbol): FeedSpec | undefined {
   return isBStockSymbol(c) ? bstockMultiplierFeed(c) : undefined;
+}
+
+/**
+ * The multiplier a bStock's share feed must be divided by: collateralFeed is Chainlink's feed of ROBINHOOD's token
+ * for that stock (share price x Robinhood's multiplier), so the share price is feed / Robinhood's multiplier and a
+ * bStock is worth feed / this x its own multiplier. Undefined for every other key.
+ */
+export function collateralRefMultiplierFeed(c: CollateralSymbol): FeedSpec | undefined {
+  if (!isBStockSymbol(c)) return undefined;
+  const ticker = BSTOCKS[c].ticker;
+  return isRhStockTicker(ticker) ? rhMultiplierFeed(ticker) : undefined;
 }
 
 /**
@@ -1186,3 +1213,37 @@ export const EXAMPLE_PRODUCTS: Record<ProductType, ProductParams> = {
     participationPct: 50,
   },
 };
+
+/**
+ * What a reader of these terms should know about the stock tokens in them (docs/CORPORATE-ACTIONS.md), in plain
+ * words: shown on the note's page, in the issue flow and on the support page. Empty when no stock is involved.
+ *  - 'bstock': a bStock pledged (here or locked on BNB Chain) has no price feed of its own.
+ *  - 'delivery': the note delivers another issuer's token than the one its price is of.
+ *  - 'price': the underlying is a stock, i.e. Chainlink's price of Robinhood's token (splits and dividends in it).
+ */
+export function stockTokenNotes(p: ProductParams): Array<{ key: 'bstock' | 'delivery' | 'price'; text: string }> {
+  const out: Array<{ key: 'bstock' | 'delivery' | 'price'; text: string }> = [];
+  const stocks = p.underlyings.filter((u) => isRhStockTicker(u.symbol));
+  if (economicsOf(p).collateral.some((c) => isBStockSymbol(c.symbol)))
+    out.push({
+      key: 'bstock',
+      text: "bStock collateral is valued from the stock's Chainlink price and the token's multiplier, not from the bStock's own market price. The two can differ, mostly when the US market is closed.",
+    });
+  if (p.settlement === 'physical') {
+    const tokens = stocks.flatMap((u) => {
+      const d = deliverableToken(p, u.symbol);
+      return d?.reference ? [d.token] : [];
+    });
+    if (tokens.length)
+      out.push({
+        key: 'delivery',
+        text: `If the note ends in the stock, it is paid in ${joinList(tokens, 'or')}. The number of tokens is set at the final check so you receive the shares owed: a split or a reinvested dividend changes how many shares a token stands for, never what you are owed.`,
+      });
+  }
+  if (stocks.length)
+    out.push({
+      key: 'price',
+      text: `Stock prices are Chainlink's prices of Robinhood's stock tokens: the share price with splits and reinvested dividends already in it, so a split does not move the note's lines. A check waits while a split or dividend is being applied.`,
+    });
+  return out;
+}

@@ -20,12 +20,15 @@ import {
   blockNumberBody,
   decodeBlockNumber,
   decodeFeedBatch,
+  decodeTokenBatch,
   feedBatchBody,
   FEEDS_PER_BATCH,
   pinnedBlock,
   type FeedReading,
+  type TokenReading,
 } from '../../packages/core/src/feed-rpc';
 import type { FeedRef } from '../../packages/core/src/keeper';
+import { isRhMultiplierRef, rhTokenOfFeed } from '../../packages/core/src/products/robinhood-tokens';
 
 export const httpFeedChainsSchema = z.record(
   z.object({
@@ -62,38 +65,62 @@ export const headBlock = (s: HTTPSendRequester, rpc: string): number =>
  * Runs on every node: one batched request, decoded to strings (aggregated as identical). A failed request fails
  * every feed in it with the same text, so nodes that saw the same failure still agree.
  */
-export const feedBatch = (s: HTTPSendRequester, req: { rpc: string; feeds: string[]; block: string }): string => {
+export const feedBatch = (
+  s: HTTPSendRequester,
+  req: { rpc: string; feeds: string[]; tokens: string[]; block: string },
+): string => {
   let readings: FeedReading[];
+  let tokens: TokenReading[];
   try {
-    readings = decodeFeedBatch(post(s, req.rpc, feedBatchBody(req.feeds, req.block)), req.feeds);
+    const reply = post(s, req.rpc, feedBatchBody(req.feeds, req.block, req.tokens));
+    readings = decodeFeedBatch(reply, req.feeds);
+    tokens = decodeTokenBatch(reply, req.feeds.length, req.tokens);
   } catch (e) {
     const m = (e as Error).message;
-    readings = req.feeds.map(() => ({ error: m.startsWith('feed RPC:') ? m : 'feed RPC: request failed' }));
+    const error = m.startsWith('feed RPC:') ? m : 'feed RPC: request failed';
+    readings = req.feeds.map(() => ({ error }));
+    tokens = req.tokens.map(() => ({ error }));
   }
-  return JSON.stringify(readings);
+  return JSON.stringify({ readings, tokens });
 };
+
+/** What the HTTP feed chains answered this run, by `${feedChain}:${lowercase address}`. */
+export interface HttpReadings {
+  feeds: Map<string, FeedReading>;
+  /** Stock tokens: of every multiplier reference, and of the token behind every stock feed read (its pause). */
+  tokens: Map<string, TokenReading>;
+}
 
 /**
  * Read every feed `wanted` on the HTTP feed chains (feeds on other chains are ignored). Returns readings by
  * `${feedChain}:${feed lowercase}`; a request that fails (or fails consensus) fails its feeds, not the run.
+ * A reference to a Robinhood stock token (its multiplier) is read as a token, and so is the token behind every
+ * Robinhood stock feed, in the same request as the feed: same block, so a price and its token's state agree.
  * HTTP calls per run: per chain with feeds due, 1 (pinned) + ceil(feeds / FEEDS_PER_BATCH); CRE allows 15.
  */
 export function httpFeedReadings(
   runtime: Runtime<{ httpFeedChains?: HttpFeedChains }>,
   wanted: FeedRef[],
-): Map<string, FeedReading> {
+): HttpReadings {
   const out = new Map<string, FeedReading>();
+  const outTokens = new Map<string, TokenReading>();
   const chains = runtime.config.httpFeedChains ?? {};
-  const byChain = new Map<string, string[]>();
+  // Per chain: [feed, its token or ''] pairs (a multiplier reference is a token with no feed: ['', token]).
+  const byChain = new Map<string, Array<[string, string]>>();
   for (const f of wanted) {
     if (!chains[f.feedChain]) continue;
     const list = byChain.get(f.feedChain) ?? [];
-    if (!list.includes(f.feed.toLowerCase())) list.push(f.feed.toLowerCase());
+    const pair: [string, string] = isRhMultiplierRef(f)
+      ? ['', f.feed.toLowerCase()]
+      : [f.feed.toLowerCase(), rhTokenOfFeed(f) ?? ''];
+    if (!list.some((x) => x[0] === pair[0] && x[1] === pair[1])) list.push(pair);
     byChain.set(f.feedChain, list);
   }
   const http = new HTTPClient();
-  for (const [name, feeds] of byChain) {
+  for (const [name, pairs] of byChain) {
     const c = chains[name];
+    const feeds = pairs.map((x) => x[0]).filter(Boolean);
+    const tokens = [...new Set(pairs.map((x) => x[1]).filter(Boolean))];
     let block: string;
     try {
       block =
@@ -104,29 +131,43 @@ export function httpFeedReadings(
             )
           : (c.blockTag ?? 'finalized');
     } catch (e) {
-      for (const f of feeds)
-        out.set(`${name}:${f}`, { error: `feed RPC: no agreed head block (${(e as Error).message})` });
+      const error = `feed RPC: no agreed head block (${(e as Error).message})`;
+      for (const f of feeds) out.set(`${name}:${f}`, { error });
+      for (const t of tokens) outTokens.set(`${name}:${t}`, { error });
       continue;
     }
-    for (let i = 0; i < feeds.length; i += FEEDS_PER_BATCH) {
+    // Feeds and tokens share the batches (a token costs 4 calls, a feed 2: FEEDS_PER_BATCH counts both as one).
+    const n = Math.max(feeds.length, tokens.length);
+    for (let i = 0; i < n; i += FEEDS_PER_BATCH) {
       const part = feeds.slice(i, i + FEEDS_PER_BATCH);
+      const partTokens = tokens.slice(i, i + FEEDS_PER_BATCH);
       let readings: FeedReading[];
+      let tokenReadings: TokenReading[];
       try {
-        readings = JSON.parse(
+        const r = JSON.parse(
           http
             .sendRequest(
               runtime,
               feedBatch,
               consensusIdenticalAggregation<string>(),
-            )({ rpc: c.rpc, feeds: part, block })
+            )({ rpc: c.rpc, feeds: part, tokens: partTokens, block })
             .result(),
-        ) as FeedReading[];
+        ) as { readings: FeedReading[]; tokens: TokenReading[] };
+        readings = r.readings;
+        tokenReadings = r.tokens;
       } catch (e) {
-        readings = part.map(() => ({ error: `feed RPC: no consensus (${(e as Error).message})` }));
+        const error = `feed RPC: no consensus (${(e as Error).message})`;
+        readings = part.map(() => ({ error }));
+        tokenReadings = partTokens.map(() => ({ error }));
       }
       part.forEach((f, j) => out.set(`${name}:${f}`, readings[j] ?? { error: 'feed RPC: no reading' }));
-      runtime.log(`${name}: ${part.length} feed(s) read over HTTP JSON-RPC at block ${block}`);
+      partTokens.forEach((t, j) =>
+        outTokens.set(`${name}:${t}`, tokenReadings[j] ?? { error: 'feed RPC: no reading' }),
+      );
+      runtime.log(
+        `${name}: ${part.length} feed(s)${partTokens.length ? ` and ${partTokens.length} stock token(s)` : ''} read over HTTP JSON-RPC at block ${block}`,
+      );
     }
   }
-  return out;
+  return { feeds: out, tokens: outTokens };
 }

@@ -128,9 +128,10 @@ export interface NoteScenario {
   perfs: number[];
   /**
    * Physical settlement: the worst performer's symbol and strike at maturity (units / strike delivered), and for a B20
-   * stock (TSLAc for TSLA on Base) its multiplier at maturity: units / strike / multiplier tokens.
+   * stock (TSLAc for TSLA on Base) or a bStock its multiplier at maturity, and the multiplier of the token the
+   * strike is a price of (Robinhood's, `refMultiplier`): units / strike x refMultiplier / multiplier tokens.
    */
-  worstAtMaturity?: { symbol: string; strike: number; multiplier?: number };
+  worstAtMaturity?: { symbol: string; strike: number; multiplier?: number; refMultiplier?: number };
   sold: number;
   /** Required collateral value as a fraction of the outstanding notional. */
   ratio: number;
@@ -249,7 +250,9 @@ export function simulateNote(p: ProductParams, s: NoteScenario): NoteOutcome {
       if (knocked)
         deliver = {
           symbol: s.worstAtMaturity!.symbol,
-          perUnit: 1 / s.worstAtMaturity!.strike / (s.worstAtMaturity!.multiplier ?? 1),
+          perUnit:
+            ((1 / s.worstAtMaturity!.strike) * (s.worstAtMaturity!.refMultiplier ?? 1)) /
+            (s.worstAtMaturity!.multiplier ?? 1),
         };
       else perUnit += ref.redemptionCash;
     }

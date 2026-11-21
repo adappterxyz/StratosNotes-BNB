@@ -263,10 +263,12 @@ contract BaseStocksEngineTest is ProductsBase {
         uint256 j = _deliveryFunding(f);
         f.actions[j].base = 4e8;
         f.actions[j].inputs = _num(4e10);
-        // The final observation's report carries the multiplier last (instantiate.ts: obs, prices, multipliers).
+        // The final observation's report ends with the token's multiplier, then Robinhood's (instantiate.ts: obs,
+        // prices, each delivery's multiplier and its reference). Robinhood's stays 1 here.
         uint256 last;
         for (uint256 i = 0; i < f.actions.length; i++) if (f.actions[i].kind == 1) last = i;
-        f.actions[last].values[f.actions[last].values.length - 1] = mult;
+        f.actions[last].values[f.actions[last].values.length - 2] = mult;
+        assertEq(f.actions[last].values[f.actions[last].values.length - 1], 1e10, "Robinhood's multiplier, 1");
         _play(f, pid, issuer, holders, 0, type(uint256).max);
         assertEq(engine.processOf(pid).status, engine.COMPLETED(), "delivered and closed");
         for (uint256 k = 0; k < holders.length; k++) {

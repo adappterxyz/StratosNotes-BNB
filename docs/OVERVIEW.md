@@ -148,6 +148,11 @@ Robinhood Chain backing a note on another chain) in [CROSS-CHAIN.md](CROSS-CHAIN
   on the other chain is locked well before the strike, and such notes need a grace period of hours.
 - **Equity feeds** follow NYSE hours with a 24 h heartbeat; notes accept a 4-day-old round so weekends don't block
   them.
+- **Corporate actions.** Splits and reinvested dividends are handled through each token's multiplier
+  ([CORPORATE-ACTIONS.md](CORPORATE-ACTIONS.md)); mergers, delistings and spin-offs are not, and cash dividends are
+  not passed to holders. A stock price check waits while an issuer applies an action.
+- **bStock prices.** A bStock on BNB Chain is valued from the stock's Chainlink price and the token's multiplier, not
+  from its own market price; the two can differ, mostly when the US market is closed.
 - **Margin** is checked at each observation, not continuously.
 - **Email checks can be bypassed in principle.** The email requirement is on-chain, but the attestation is signed by
   our verifier key: whoever holds it can attest addresses. It needs a KMS or multisig before mainnet.

@@ -29,6 +29,10 @@ import {
   wirePlan,
   XC_CHAINS,
   type ProductParams,
+  collateralRefMultiplierFeed,
+  evalExpr,
+  RH_STOCK_TOKENS,
+  RH_TOKEN_CHAIN,
 } from '../src';
 
 const BNB = 'bnb-testnet' as const;
@@ -82,13 +86,45 @@ describe("Binance's bStocks on BNB Chain: notes.markets stand-ins on BNB Chain t
     expect(prod.assets.find((a) => a.id === 'col_TSLAB')).toMatchObject({ name: 'Collateral TSLAB', decimals: 18 });
     const c = compileTemplate({ product: bnbTsla });
     const names = c.def.fields.map((f) => f.name);
-    expect(names).toEqual(expect.arrayContaining(['pxs_TSLAB', 'pxm_TSLAB', 'px_TSLAB']));
-    expect(prod.bpmnXml).toMatch(/pxs_TSLAB \* pxm_TSLAB/);
+    expect(names).toEqual(expect.arrayContaining(['pxs_TSLAB', 'pxm_TSLAB', 'pxr_TSLAB', 'px_TSLAB']));
+    // The stock feed is the price of Robinhood's token: divided by Robinhood's multiplier it is the share price.
+    expect(prod.bpmnXml).toMatch(/pxs_TSLAB \* pxm_TSLAB \/ pxr_TSLAB/);
+    expect(collateralRefMultiplierFeed('TSLAB')).toMatchObject({
+      feed: RH_STOCK_TOKENS.TSLA,
+      feedChain: RH_TOKEN_CHAIN,
+    });
+    expect(collateralRefMultiplierFeed('TSLA')).toBeUndefined();
+    expect(collateralRefMultiplierFeed('TSLAc')).toBeUndefined();
+    // The engine's own arithmetic (10-decimal fixed point) on the compiled formula, through a 2:1 split.
+    const at = (n: string) => c.def.fields.findIndex((f) => f.name === n);
+    const cap = c.def.steps.flatMap((s) => s.captures).find((x) => x.field === at('px_TSLAB') && x.expr !== 0xffff)!;
+    const px = (feed: number, bstock: number, robinhood: number) => {
+      const v: Record<number, bigint> = {
+        [at('pxs_TSLAB')]: BigInt(Math.round(feed * 1e10)),
+        [at('pxm_TSLAB')]: BigInt(Math.round(bstock * 1e10)),
+        [at('pxr_TSLAB')]: BigInt(Math.round(robinhood * 1e10)),
+      };
+      return (
+        Number(
+          evalExpr(
+            c.def.exprs[cap.expr],
+            c.def.fields.map((f) => f.kind),
+            (f) => v[f] ?? null,
+          ),
+        ) / 1e10
+      );
+    };
+    // TSLA at 400 a share, every token one share: a bStock is worth 400.
+    expect(px(400, 1, 1)).toBe(400);
+    // After a 2:1 split (share 200, both tokens 2 shares): the Robinhood feed still reads 400, the bStock is worth 400.
+    expect(px(400, 2, 2)).toBe(400);
+    // Reinvested dividends drift apart (Robinhood 1.0017, the bStock 1.0013), share at 400: 400 x 1.0013.
+    expect(px(400 * 1.0017, 1.0013, 1.0017)).toBeCloseTo(400 * 1.0013, 6);
     // Coverage reads px_TSLAB like any other collateral price.
     expect(prod.bpmnXml).toMatch(/\* px_TSLAB \* haircut_TSLAB/);
   });
 
-  it('delivers a share underlying in its bStock at shares / multiplier', () => {
+  it("delivers a share underlying in its bStock at shares / multiplier, the shares from Robinhood's multiplier", () => {
     expect(deliverableToken({ chain: BNB }, 'TSLA')).toMatchObject({
       token: 'TSLAB',
       decimals: 18,
@@ -96,7 +132,8 @@ describe("Binance's bStocks on BNB Chain: notes.markets stand-ins on BNB Chain t
     });
     expect(deliverableToken({ chain: BNB }, 'GOOGL')).toMatchObject({ token: 'GOOGLB' });
     expect(deliverableToken({ chain: BNB }, 'ETH')).toBeUndefined();
-    expect(instantiateProduct(bnbTsla).bpmnXml).toMatch(/1 \/ initialLevel \/ mult_TSLA/);
+    expect(deliverableToken({ chain: BNB }, 'TSLA')?.reference).toMatchObject({ field: 'rmult_TSLA' });
+    expect(instantiateProduct(bnbTsla).bpmnXml).toMatch(/1 \/ initialLevel \* rmult_TSLA \/ mult_TSLA/);
   });
 
   it('is offered, served and wired now BNB Chain testnet is deployed', () => {
@@ -125,7 +162,7 @@ describe("Binance's bStocks on BNB Chain: notes.markets stand-ins on BNB Chain t
     };
     expect(collateralTokenOf(rhNote, 'NVDAB')).toEqual({ token: 'NVDAB.bnb', decimals: 18 });
     expect(RECEIPTS['NVDAB.bnb']).toMatchObject({ homes: [RH, BASE], asset: BNB, symbol: 'NVDAB' });
-    expect(instantiateProduct(rhNote).bpmnXml).toMatch(/pxs_NVDAB \* pxm_NVDAB/);
+    expect(instantiateProduct(rhNote).bpmnXml).toMatch(/pxs_NVDAB \* pxm_NVDAB \/ pxr_NVDAB/);
     const bnbNote: ProductParams = {
       ...EXAMPLE_PRODUCTS.phoenix,
       chain: BNB,

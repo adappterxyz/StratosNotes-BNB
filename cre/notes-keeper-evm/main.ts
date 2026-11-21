@@ -38,7 +38,16 @@ import {
 import { decodeFunctionResult, encodeFunctionData, zeroAddress, type Address, type Hex } from 'viem';
 import { z } from 'zod';
 import { decodeEvmDef, encodeEvmReport } from '../../packages/core/src/compile-evm';
-import { checkRound, dueReports, routeFeed, type DueReport, type FeedRef } from '../../packages/core/src/keeper';
+import {
+  checkRound,
+  corporateActionHold,
+  dueReports,
+  routeFeed,
+  tokenMultiplier,
+  type DueReport,
+  type FeedRef,
+} from '../../packages/core/src/keeper';
+import { isRhMultiplierRef, rhTokenOfFeed } from '../../packages/core/src/products/robinhood-tokens';
 import {
   collateralShortfalls,
   describeFlush,
@@ -292,7 +301,22 @@ export const onCron = (runtime: Runtime<Config>): string => {
   const price = (f: FeedRef) => {
     const k = `${f.feedChain}:${f.feed.toLowerCase()}:${f.staleness}`;
     if (!prices.has(k)) {
-      const reading = httpReadings.get(`${f.feedChain}:${f.feed.toLowerCase()}`);
+      // A Robinhood stock token's multiplier (the reference of a delivery or of a bStock price): its uiMultiplier(),
+      // never while the issuer is processing a corporate action on it.
+      if (isRhMultiplierRef(f)) {
+        const t = httpReadings.tokens.get(`${f.feedChain}:${f.feed.toLowerCase()}`);
+        if (!t) throw new Error(`no token reading for ${f.feed} (is ${f.feedChain} an HTTP feed chain?)`);
+        prices.set(k, tokenMultiplier(t, nowSec));
+        return prices.get(k)!;
+      }
+      // A Robinhood stock price waits the same way: the feed is price x multiplier, wrong while they switch.
+      const token = rhTokenOfFeed(f);
+      if (token) {
+        const t = httpReadings.tokens.get(`${f.feedChain}:${token}`);
+        const hold = t ? corporateActionHold(t, nowSec) : 'no token reading (corporate-action check)';
+        if (hold) throw new Error(`${f.field}: ${hold}`);
+      }
+      const reading = httpReadings.feeds.get(`${f.feedChain}:${f.feed.toLowerCase()}`);
       if (reading) {
         const { round, decimals } = readingToRound(reading);
         prices.set(k, checkRound(round, decimals, nowSec, f.staleness, cfg.finalityAllowanceSec));

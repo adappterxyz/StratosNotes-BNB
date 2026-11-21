@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   blockNumberBody,
   checkRound,
+  corporateActionHold,
+  decodeTokenBatch,
+  tokenMultiplier,
+  TOKEN_SELECTORS,
+  CORPORATE_ACTION_WINDOW,
+  isRhMultiplierRef,
+  rhTokenOfFeed,
+  RH_STOCK_TOKENS,
+  FEEDS,
+  FEED_CATALOGUE,
   decodeBlockNumber,
   decodeFeedBatch,
   feedBatchBody,
@@ -116,5 +126,72 @@ describe('feed reads over JSON-RPC (chains CRE has no EVM capability for)', () =
       chainId: 4663,
       lagBlocks: 600,
     });
+  });
+
+  const w = (v: bigint | number) => '0x' + BigInt(v).toString(16).padStart(64, '0');
+  const TOKEN = RH_STOCK_TOKENS.TSLA;
+
+  it('asks a stock token for its multiplier, pending change and pause after the feeds, and decodes them', () => {
+    const body = JSON.parse(feedBatchBody([TSLA], 'safe', [TOKEN]));
+    expect(body.map((c: { id: number }) => c.id)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(body.slice(2).map((c: { params: [{ to: string; data: string }] }) => c.params[0])).toEqual(
+      TOKEN_SELECTORS.map((data) => ({ to: TOKEN, data })),
+    );
+    // SNDK on 2026-11-21: 8 shares a token after its split, nothing pending, not paused.
+    const reply = JSON.stringify([
+      { id: 5, result: w(0) },
+      { id: 2, result: w(8n * 10n ** 18n) },
+      { id: 3, result: w(8n * 10n ** 18n) },
+      { id: 4, result: w(1795185000) },
+      { id: 0, result: TSLA_ROUND },
+      { id: 1, result: EIGHT },
+    ]);
+    const [t] = decodeTokenBatch(reply, 1, [TOKEN]);
+    expect(t).toEqual({
+      multiplier: '8000000000000000000',
+      pending: '8000000000000000000',
+      effectiveAt: '1795185000',
+      paused: false,
+    });
+    expect(decodeFeedBatch(reply, [TSLA])[0]).toMatchObject({ decimals: 8 });
+    // One failed call fails that token only, with the same text on every node.
+    expect(decodeTokenBatch(JSON.stringify([{ id: 2, result: w(1) }]), 1, [TOKEN])).toEqual([
+      { error: 'token RPC: no reply' },
+    ]);
+    expect(decodeTokenBatch('<html>', 0, [TOKEN])).toEqual([{ error: 'token RPC: reply is not JSON' }]);
+  });
+
+  it('holds a stock observation while its token is in a corporate action', () => {
+    const now = 1_800_000_000;
+    const t = {
+      multiplier: String(2n * 10n ** 18n),
+      pending: String(2n * 10n ** 18n),
+      effectiveAt: '0',
+      paused: false,
+    };
+    expect(corporateActionHold(t, now)).toBeNull();
+    expect(tokenMultiplier(t, now)).toBe(20_000_000_000n); // 2, engine fixed point
+    expect(corporateActionHold({ ...t, paused: true }, now)).toMatch(/paused/);
+    // A change an hour either side of now: wait; older or further out: go.
+    expect(corporateActionHold({ ...t, effectiveAt: String(now + 60) }, now)).toMatch(/takes effect/);
+    expect(corporateActionHold({ ...t, effectiveAt: String(now - 60) }, now)).toMatch(/took effect/);
+    expect(corporateActionHold({ ...t, effectiveAt: String(now - CORPORATE_ACTION_WINDOW) }, now)).toBeNull();
+    expect(corporateActionHold({ ...t, effectiveAt: String(now + CORPORATE_ACTION_WINDOW) }, now)).toBeNull();
+    expect(() => tokenMultiplier({ ...t, paused: true }, now)).toThrow(/paused/);
+    expect(() => tokenMultiplier({ error: 'token RPC: no reply' }, now)).toThrow(/no reply/);
+    expect(() => tokenMultiplier({ ...t, multiplier: '0' }, now)).toThrow(/non-positive/);
+  });
+
+  it('tells a multiplier reference from a price feed, and finds the token behind a stock feed', () => {
+    expect(isRhMultiplierRef({ feed: TOKEN, feedChain: 'robinhood-mainnet' })).toBe(true);
+    expect(isRhMultiplierRef({ feed: TOKEN.toLowerCase(), feedChain: 'robinhood-mainnet' })).toBe(true);
+    expect(isRhMultiplierRef({ feed: TOKEN, feedChain: 'ethereum-mainnet' })).toBe(false);
+    expect(isRhMultiplierRef(FEEDS.TSLA)).toBe(false);
+    expect(rhTokenOfFeed(FEEDS.TSLA)).toBe(TOKEN.toLowerCase());
+    expect(rhTokenOfFeed(FEEDS.ETH)).toBeUndefined();
+    // Every stock feed of the catalogue on Robinhood Chain has its token.
+    const stocks = FEED_CATALOGUE.filter((f) => f.assetClass === 'Stocks' && f.feedChain === 'robinhood-mainnet');
+    expect(stocks.length).toBe(Object.keys(RH_STOCK_TOKENS).length);
+    for (const f of stocks) expect(rhTokenOfFeed(f)).toMatch(/^0x[0-9a-f]{40}$/);
   });
 });

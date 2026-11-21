@@ -13,10 +13,12 @@ AMD, PLTR on Robinhood Chain; on Base Sepolia TSLA, AMZN, NVDA, AAPL, MSFT and M
 multiplier, once they are deployed); every other underlying, including all forex and commodities, settles in cash
 (final ÷ strike in the chain's dollar below the knock-in).
 
-**Share prices, not token prices.** An underlying is always the share (or coin, or currency): TSLA is Robinhood Chain
-mainnet's `Robinhood TSLA / USD` feed, whichever chain the note runs on. Coinbase's B20 stocks on Base have their own
-Chainlink feeds (`Coinbase TSLA` …, Base mainnet) that publish the TOKEN price, share price × the token's multiplier:
-those value TSLAc… as collateral only (keys `TSLAc`…, never `TSLA`) and are not in the catalogue. See
+**A stock underlying is the price of Robinhood's token.** TSLA is Robinhood Chain mainnet's `RHTSLA / USD` feed,
+whichever chain the note runs on: the share price × the multiplier of Robinhood's token (the shares one token stands
+for). A split does not move it, and reinvested dividends lift it slightly above the share price. Coinbase's B20 stocks
+on Base have their own Chainlink feeds (`Coinbase TSLA` …, Base mainnet), share price × Coinbase's multiplier: those
+value TSLAc… as collateral only (keys `TSLAc`…, never `TSLA`) and are not in the catalogue. What this means for
+delivery and for bStock collateral: [CORPORATE-ACTIONS.md](CORPORATE-ACTIONS.md); the tokens:
 [BASE-STOCKS.md](BASE-STOCKS.md).
 
 ## What is in it (generated 2026-10-26)

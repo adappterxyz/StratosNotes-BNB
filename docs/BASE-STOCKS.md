@@ -44,9 +44,9 @@ the catalogue to deliver against). The registry: `B20_STOCKS` in `packages/core/
 | | Robinhood's stock tokens (Robinhood Chain) | Coinbase's B20 (Base mainnet) and the stand-ins (Base Sepolia) |
 |---|---|---|
 | Decimals | 18 | 8 |
-| One token is | one share | `multiplier / 1e18` shares |
-| Corporate action (split, dividend reinvested) | n/a here | balances never change; the WAD `multiplier()` does (`scaledBalanceOf`, ERC-8056 `uiMultiplier()` / `balanceOfUI()`, `toUIAmount` / `fromUIAmount`) |
-| Price feed | the share's (`Robinhood TSLA / USD`) | per token (`Coinbase TSLA`): share price × multiplier, 8 decimals, 0.5% deviation / 24 h heartbeat in market hours, holds its last value while closed or paused |
+| One token is | `uiMultiplier() / 1e18` shares | `multiplier / 1e18` shares |
+| Corporate action (split, dividend reinvested) | balances never change; `uiMultiplier()` does ([CORPORATE-ACTIONS.md](CORPORATE-ACTIONS.md)) | balances never change; the WAD `multiplier()` does (`scaledBalanceOf`, ERC-8056 `uiMultiplier()` / `balanceOfUI()`, `toUIAmount` / `fromUIAmount`) |
+| Price feed | per token (`RHTSLA / USD`): share price × Robinhood's multiplier | per token (`Coinbase TSLA`): share price × multiplier, 8 decimals, 0.5% deviation / 24 h heartbeat in market hours, holds its last value while closed or paused |
 | Transfer restrictions | issuer can pause / freeze | a policy can block an address (`isAuthorized(policyId, account)`, `policyExists`): a blocked transfer reverts, `approve` is never gated; functions can be paused |
 
 The stand-in (`packages/evm-engine/src/base-stocks/B20StandIn.sol`) imitates all of it: an ERC-20 with the B20 /
@@ -108,9 +108,11 @@ would favour the holder by the same amount, but the expression language has no c
 invariant matters more. The multiplier itself enters the engine truncated to 10 decimals (1.000537939576369481 →
 1.0005379395), a relative error under 1e-10. Over-funded tokens go back to the issuer at the release.
 
-**Which multiplier.** The one at the final observation: a corporate action during the note's life (a 2:1 split
-doubling the multiplier) halves the tokens delivered and keeps the shares owed. The share-price underlying itself is
-the market price, as for every stock note.
+**Which multipliers.** The strike is a price of Robinhood's token (every stock feed is), so `1 / strike` is a number
+of Robinhood tokens. The note delivers `1 / strike × rmult_TSLA / mult_TSLA` TSLAc: Robinhood's multiplier turns it
+into shares, TSLAc's into tokens, both read at the final observation. A 2:1 split applied by both issuers cancels out;
+a split or reinvested dividend on one side only still delivers the shares owed
+([CORPORATE-ACTIONS.md](CORPORATE-ACTIONS.md)).
 
 **A default before maturity** values a deliverable at its strike per token, without the multiplier (it is read only at
 the final observation): it values a B20 token at most a multiplier's worth low, so the holders take that much more

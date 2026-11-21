@@ -37,17 +37,25 @@ a token called "Binance Stocks / bStocks" at `0x2f70…4444` is not Binance's.
 
 A bStock has **no per-token Chainlink feed** (unlike Coinbase's B20 stocks on Base, docs/BASE-STOCKS.md). One token is
 worth `uiMultiplier / 1e18` shares: dividends and forward splits raise the multiplier, and raw balances never rebase. So
-a note values bStock collateral as **share price x multiplier**, both read into the note by the keeper:
+a note values bStock collateral as **share price x multiplier**. The stock's Chainlink feed is the price of
+*Robinhood's* token (share price x Robinhood's multiplier), so the share price is that feed divided by Robinhood's
+multiplier ([CORPORATE-ACTIONS.md](CORPORATE-ACTIONS.md)). All three are read into the note by the keeper:
 
 - `pxs_TSLAB`: the TSLA share price, the catalogue's feed (the same one underlyings use);
 - `pxm_TSLAB`: the multiplier, from a `BStockMultiplierFeed` next to the token (an AggregatorV3 view of
   `uiMultiplier()`, the multiplier in effect: a scheduled change counts from its effective time);
-- `px_TSLAB = pxs_TSLAB * pxm_TSLAB`: a formula field the engine computes, read by coverage and defaults like any other
-  collateral price.
+- `pxr_TSLAB`: Robinhood's multiplier for TSLA, `uiMultiplier()` of its mainnet token;
+- `px_TSLAB = pxs_TSLAB * pxm_TSLAB / pxr_TSLAB`: a formula field the engine computes, read by coverage and defaults
+  like any other collateral price.
+
+**Caveat.** This is not the bStock's own market price: Chainlink publishes none. bStocks trade around the clock, the
+stock feed follows US market hours, so the two can differ, mostly when the market is closed. The app says so wherever a
+bStock is pledged (`stockTokenNotes`).
 
 The collateral key is the token's symbol (TSLAB), never the share's: pricing a bStock as a share would be off by its
-multiplier. Physical delivery of a share underlying on BNB Chain pays **shares / multiplier** bStock units, the
-multiplier read at the final observation, exactly as a B20 delivery on Base (`mult_TSLA`).
+multiplier. Physical delivery of a share underlying on BNB Chain pays **shares / multiplier** bStock units, the shares
+being `1 / strike` Robinhood tokens x Robinhood's multiplier (`rmult_TSLA`), both multipliers read at the final
+observation, exactly as a B20 delivery on Base (`mult_TSLA`).
 
 The stand-in imitates the parts that matter to the engine: the multiplier (scheduled with
 `setUIMultiplier(value, effectiveAt)`; `pendingMultiplier`, `effectiveAt`, `hasPendingMultiplier`), a blocklist (a

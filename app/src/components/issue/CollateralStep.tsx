@@ -10,6 +10,7 @@ import {
   NOTE_CHAIN_SHORT,
   noteChainOf,
   remoteCollateralOf,
+  stockTokenNotes,
   UNPRICED_STOCKS,
   type CollateralSymbol,
   type DefaultRule,
@@ -180,6 +181,13 @@ export function CollateralStep({
             {UNPRICED_STOCKS.join(', ')}: on Robinhood Chain, no Chainlink price yet, so it can't be pledged.
           </span>
         )}
+        {stockTokenNotes(p)
+          .filter((n) => n.key === 'bstock')
+          .map((n) => (
+            <span key={n.key} className="hint" data-stock-note={n.key}>
+              {n.text}
+            </span>
+          ))}
       </div>
       <Slider
         id="iw-ratio"
