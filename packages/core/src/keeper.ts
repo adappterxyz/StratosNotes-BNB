@@ -50,6 +50,11 @@ export interface FeedRef {
   feedChain: string;
   /** Seconds the feed may go without an update (its heartbeat). */
   staleness: number;
+  /**
+   * Fixing window, seconds (absent: the latest round). The price is the time-weighted median of the feed's rounds
+   * over the window before the reading (timeWeightedMedian): a wick shorter than half the window does not move it.
+   */
+  window?: number;
 }
 
 export interface DueReport {
@@ -65,11 +70,14 @@ export interface DueReport {
 /** Where each oracle field's feed is, from the definition's metadata (packages/core/src/compile.ts). */
 export function oracleFeeds(
   def: WorkflowDef,
-): Record<string, { feed: string; feedChain?: string; staleness?: number }> {
+): Record<string, { feed: string; feedChain?: string; staleness?: number; window?: number }> {
   try {
     return (
-      (JSON.parse(def.meta) as { oracles?: Record<string, { feed: string; feedChain?: string; staleness?: number }> })
-        .oracles ?? {}
+      (
+        JSON.parse(def.meta) as {
+          oracles?: Record<string, { feed: string; feedChain?: string; staleness?: number; window?: number }>;
+        }
+      ).oracles ?? {}
     );
   } catch {
     return {};
@@ -143,7 +151,13 @@ export function dueReports(p: ProcessState, def: WorkflowDef, nowSec: number): D
       const name = def.fields[c.field].name;
       const o = oracles[name];
       return o
-        ? { field: name, feed: o.feed, feedChain: o.feedChain ?? 'ethereum-mainnet', staleness: o.staleness ?? 3600 }
+        ? {
+            field: name,
+            feed: o.feed,
+            feedChain: o.feedChain ?? 'ethereum-mainnet',
+            staleness: o.staleness ?? 3600,
+            ...(o.window ? { window: o.window } : {}),
+          }
         : null;
     });
     if (feeds.some((f) => !f)) continue; // a capture with no recorded feed cannot be observed
@@ -163,7 +177,15 @@ export type FeedRoutes = Record<string, { feed: string; feedChain: string; stale
 
 export function routeFeed(f: FeedRef, routes: FeedRoutes | undefined): FeedRef {
   const r = routes?.[f.feed.toLowerCase()];
-  return r ? { field: f.field, feed: r.feed, feedChain: r.feedChain, staleness: r.staleness ?? f.staleness } : f;
+  return r
+    ? {
+        field: f.field,
+        feed: r.feed,
+        feedChain: r.feedChain,
+        staleness: r.staleness ?? f.staleness,
+        ...(f.window ? { window: f.window } : {}),
+      }
+    : f;
 }
 
 /** Chainlink answer (feed decimals) -> engine fixed point (10 decimals). */
@@ -219,3 +241,49 @@ export function tokenMultiplier(t: TokenReading, nowSec: number): bigint {
   if (m <= 0n) throw new Error('non-positive multiplier');
   return feedToFixed(m, 18);
 }
+
+/** One round of a feed: when it was written (unix seconds) and its answer (feed decimals). */
+export interface PricePoint {
+  at: number;
+  answer: bigint;
+}
+
+/**
+ * The time-weighted median of a feed over [from, to]: each round's answer counts for as long as it was the feed's
+ * price inside the window (from its own time, or `from`, to the next round, or `to`); the median is the lowest answer
+ * at which half that time is reached. A wick, however deep, that lasted less than half the window does not move it;
+ * a price that held for most of the window is the fixing. Rounds after `to` are ignored. `covered` is the part of
+ * the window the rounds account for (less than the window when the oldest round given is younger than `from`).
+ * Deterministic integer arithmetic: every node and the fallback keeper get the same number from the same rounds.
+ */
+export function timeWeightedMedian(
+  points: readonly PricePoint[],
+  from: number,
+  to: number,
+): { answer: bigint; covered: number } {
+  const pts = points.filter((p) => p.at <= to).sort((a, b) => a.at - b.at);
+  if (!pts.length) throw new Error('no round at or before the fixing time');
+  const weighted: Array<{ answer: bigint; w: number }> = [];
+  let covered = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const start = Math.max(pts[i].at, from);
+    const end = i + 1 < pts.length ? Math.min(pts[i + 1].at, to) : to;
+    const w = end - start;
+    if (w > 0) {
+      weighted.push({ answer: pts[i].answer, w });
+      covered += w;
+    }
+  }
+  // A window of no length (or rounds only at its very end): the price in effect at `to`.
+  if (!covered) return { answer: pts[pts.length - 1].answer, covered: 0 };
+  weighted.sort((a, b) => (a.answer < b.answer ? -1 : a.answer > b.answer ? 1 : 0));
+  let acc = 0;
+  for (const x of weighted) {
+    acc += x.w;
+    if (acc * 2 >= covered) return { answer: x.answer, covered };
+  }
+  return { answer: weighted[weighted.length - 1].answer, covered };
+}
+
+/** Whether the rounds given reach back to the start of the window (the oldest is at or before `from`). */
+export const coversWindow = (points: readonly PricePoint[], from: number): boolean => points.some((p) => p.at <= from);

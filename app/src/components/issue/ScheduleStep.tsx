@@ -1,4 +1,5 @@
 import { Timer } from 'lucide-react';
+import { canWindowFeed, FIXING_WINDOWS, type ProductParams } from '@sn/core';
 import type { ChainConfig } from '../../lib/api';
 import { Presets } from './controls';
 import type { Every, Timing } from './schedule';
@@ -19,6 +20,8 @@ const EVERY: Array<{ v: Every; label: string; sub: string; star?: boolean }> = [
 
 /** Step 3, Schedule: how much is on offer, when the book closes, and how often the price is checked. */
 export function ScheduleStep({
+  p,
+  set,
   sym,
   size,
   setSize,
@@ -35,6 +38,8 @@ export function ScheduleStep({
   fmtT,
   demo,
 }: {
+  p: ProductParams;
+  set: (patch: Partial<ProductParams>) => void;
   sym: string;
   size: number;
   setSize: (n: number) => void;
@@ -52,6 +57,8 @@ export function ScheduleStep({
   demo: boolean;
 }) {
   const runs = demo ? Math.round(((dateOf(observations) - strikeAt) / 60) * 10) / 10 : null;
+  // A fixing window needs the feed's price history, which the keeper can read for stocks only so far.
+  const canWindow = p.underlyings.every(canWindowFeed);
   return (
     <>
       <h2>Schedule</h2>
@@ -133,6 +140,27 @@ export function ScheduleStep({
             setTiming(null);
           }}
         />
+      </div>
+
+      <div className="iw-field" data-fixing-window={p.fixingWindowMin ?? 0}>
+        <div className="iw-field-h">
+          <span className="lbl">Which price each check uses</span>
+        </div>
+        <Presets
+          label="Price fixing"
+          options={FIXING_WINDOWS.filter((m) => m === 0 || canWindow).map((m) => ({
+            label: m ? `${m}-minute median` : 'Latest price',
+            sub: m ? 'Ignores a brief spike' : 'One reading',
+            value: m as number,
+          }))}
+          value={canWindow ? (p.fixingWindowMin ?? 0) : 0}
+          onPick={(m) => set({ fixingWindowMin: m || undefined })}
+        />
+        <span className="hint">
+          {canWindow
+            ? 'A median takes the price that held for most of the minutes before the check, from the Chainlink feed. A sudden spike or dip that reverses does not set the start price, a coupon or the barrier.'
+            : 'A median over the minutes before each check is available for stocks only for now.'}
+        </span>
       </div>
 
       <div className="iw-timeline" aria-label="Dates">

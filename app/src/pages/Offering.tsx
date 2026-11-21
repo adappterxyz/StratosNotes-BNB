@@ -15,6 +15,7 @@ import {
   instantiateProduct,
   isNoteChain,
   NOTE_CHAIN_SHORT,
+  fixingRuleText,
   SCALE,
   stockTokenNotes,
 } from '@sn/core';
@@ -333,6 +334,11 @@ export default function OfferingPage() {
                   </span>
                 </p>
               </div>
+              {o.hasTerms && fixingRuleText(o.params) && (
+                <p className="xs muted" data-fixing-rule>
+                  {fixingRuleText(o.params)}
+                </p>
+              )}
               {o.hasTerms &&
                 stockTokenNotes(o.params).map((n) => (
                   <p key={n.key} className="xs muted" data-stock-note={n.key}>

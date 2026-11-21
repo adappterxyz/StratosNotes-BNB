@@ -12,6 +12,11 @@
 import {
   checkRound,
   corporateActionHold,
+  feedToFixed,
+  ROUND_CALLS_PER_REQUEST,
+  roundOffsets,
+  timeWeightedMedian,
+  type PricePoint,
   isRhMultiplierRef,
   rhTokenOfFeed,
   routeFeed,
@@ -45,6 +50,22 @@ export interface FallbackConfig {
   feedRoutes?: FeedRoutes;
   log: (line: string) => void;
 }
+
+const roundAbi = [
+  {
+    type: 'function',
+    name: 'getRoundData',
+    stateMutability: 'view',
+    inputs: [{ name: 'roundId', type: 'uint80' }],
+    outputs: [
+      { name: 'roundId', type: 'uint80' },
+      { name: 'answer', type: 'int256' },
+      { name: 'startedAt', type: 'uint256' },
+      { name: 'updatedAt', type: 'uint256' },
+      { name: 'answeredInRound', type: 'uint80' },
+    ],
+  },
+] as const;
 
 const stockTokenAbi = [
   { type: 'function', name: 'uiMultiplier', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -101,13 +122,41 @@ export async function readFeed(cfg: FallbackConfig, f: FeedRef, nowSec: number):
     functionName: 'decimals',
     ...block,
   });
-  return checkRound(
+  const latest = checkRound(
     { roundId, answer, updatedAt, answeredInRound },
     decimals,
     nowSec,
     f.staleness,
     cfg.finalityAllowanceSec,
   );
+  if (!f.window) return latest;
+  // A fixing window, as the CRE keeper: the time-weighted median of the feed's rounds over the window, the same
+  // rounds (roundOffsets back from the latest, never below the first of the proxy's phase) at the same block.
+  const inPhase = roundId & ((1n << 64n) - 1n);
+  const ids = roundOffsets(ROUND_CALLS_PER_REQUEST)
+    .filter((o) => BigInt(o) < inPhase)
+    .map((o) => roundId - BigInt(o));
+  const points: PricePoint[] = [];
+  for (let i = 0; i < ids.length; i += 12) {
+    const rounds = await Promise.all(
+      ids
+        .slice(i, i + 12)
+        .map((id) =>
+          client
+            .readContract({
+              address: f.feed as Address,
+              abi: roundAbi,
+              functionName: 'getRoundData',
+              args: [id],
+              ...block,
+            })
+            .catch(() => null),
+        ),
+    );
+    for (const r of rounds) if (r && r[3] !== 0n && r[1] > 0n) points.push({ at: Number(r[3]), answer: r[1] });
+  }
+  if (!points.length) throw new Error(`${f.field}: no past round could be read (fixing window)`);
+  return feedToFixed(timeWeightedMedian(points, nowSec - f.window, nowSec).answer, decimals);
 }
 
 export interface RunResult {

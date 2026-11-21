@@ -153,6 +153,9 @@ Robinhood Chain backing a note on another chain) in [CROSS-CHAIN.md](CROSS-CHAIN
   not passed to holders. A stock price check waits while an issuer applies an action.
 - **bStock prices.** A bStock on BNB Chain is valued from the stock's Chainlink price and the token's multiplier, not
   from its own market price; the two can differ, mostly when the US market is closed.
+- **One price per check.** A check uses the feed's latest price, or, if the issuer sets a fixing window (15 to 60
+  minutes, stocks only so far), the time-weighted median over it, so a brief spike does not set a fixing
+  ([UNDERLYINGS.md](UNDERLYINGS.md)).
 - **Margin** is checked at each observation, not continuously.
 - **Email checks can be bypassed in principle.** The email requirement is on-chain, but the attestation is signed by
   our verifier key: whoever holds it can attest addresses. It needs a KMS or multisig before mainnet.

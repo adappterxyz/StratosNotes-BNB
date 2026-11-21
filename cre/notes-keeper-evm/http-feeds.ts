@@ -20,14 +20,19 @@ import {
   blockNumberBody,
   decodeBlockNumber,
   decodeFeedBatch,
+  decodeRoundHistory,
   decodeTokenBatch,
   feedBatchBody,
   FEEDS_PER_BATCH,
   pinnedBlock,
+  ROUND_CALLS_PER_REQUEST,
+  roundHistoryBody,
+  roundPoints,
   type FeedReading,
+  type RoundHistoryRequest,
   type TokenReading,
 } from '../../packages/core/src/feed-rpc';
-import type { FeedRef } from '../../packages/core/src/keeper';
+import { coversWindow, timeWeightedMedian, type FeedRef, type PricePoint } from '../../packages/core/src/keeper';
 import { isRhMultiplierRef, rhTokenOfFeed } from '../../packages/core/src/products/robinhood-tokens';
 
 export const httpFeedChainsSchema = z.record(
@@ -89,6 +94,8 @@ export interface HttpReadings {
   feeds: Map<string, FeedReading>;
   /** Stock tokens: of every multiplier reference, and of the token behind every stock feed read (its pause). */
   tokens: Map<string, TokenReading>;
+  /** The block each chain was read at (a tag or a pinned 0x number): a fixing window reads its history there too. */
+  blocks: Map<string, string>;
 }
 
 /**
@@ -104,6 +111,7 @@ export function httpFeedReadings(
 ): HttpReadings {
   const out = new Map<string, FeedReading>();
   const outTokens = new Map<string, TokenReading>();
+  const blocks = new Map<string, string>();
   const chains = runtime.config.httpFeedChains ?? {};
   // Per chain: [feed, its token or ''] pairs (a multiplier reference is a token with no feed: ['', token]).
   const byChain = new Map<string, Array<[string, string]>>();
@@ -136,6 +144,7 @@ export function httpFeedReadings(
       for (const t of tokens) outTokens.set(`${name}:${t}`, { error });
       continue;
     }
+    blocks.set(name, block);
     // Feeds and tokens share the batches (a token costs 4 calls, a feed 2: FEEDS_PER_BATCH counts both as one).
     const n = Math.max(feeds.length, tokens.length);
     for (let i = 0; i < n; i += FEEDS_PER_BATCH) {
@@ -169,5 +178,96 @@ export function httpFeedReadings(
       );
     }
   }
-  return { feeds: out, tokens: outTokens };
+  return { feeds: out, tokens: outTokens, blocks };
+}
+
+/** Runs on every node: one batched request of past rounds, decoded to compact strings (aggregated as identical). */
+export const roundHistory = (
+  s: HTTPSendRequester,
+  req: { rpc: string; reqs: RoundHistoryRequest[]; block: string },
+): string => {
+  try {
+    return JSON.stringify(decodeRoundHistory(post(s, req.rpc, roundHistoryBody(req.reqs, req.block)), req.reqs));
+  } catch (e) {
+    const m = (e as Error).message;
+    return JSON.stringify(
+      req.reqs.map(() => ({ error: m.startsWith('feed RPC:') ? m : 'history RPC: request failed' })),
+    );
+  }
+};
+
+/**
+ * The windowed fixing of every feed `wanted` with a fixing window (FeedRef.window), by
+ * `${feedChain}:${feed lowercase}:${window}`: the time-weighted median of the feed's rounds over the window before
+ * `nowSec`, in feed decimals. The rounds are read going back from the latest round already agreed (`readings`), at
+ * the same block, in ONE request per chain (ROUND_CALLS_PER_REQUEST shared by its feeds, spaced as roundOffsets).
+ * A request that fails fails its fixings: the report waits for the next run, it never falls back to the latest
+ * round. No request at all for a run without a window.
+ */
+export function httpWindowFixings(
+  runtime: Runtime<{ httpFeedChains?: HttpFeedChains }>,
+  readings: HttpReadings,
+  wanted: FeedRef[],
+  nowSec: number,
+): Map<string, bigint | { error: string }> {
+  const out = new Map<string, bigint | { error: string }>();
+  const chains = runtime.config.httpFeedChains ?? {};
+  // Per chain, per feed: the windows asked for and the round to read back from.
+  const byChain = new Map<string, Map<string, { windows: Set<number>; from: string }>>();
+  for (const f of wanted) {
+    if (!f.window || !chains[f.feedChain]) continue;
+    const feed = f.feed.toLowerCase();
+    const latest = readings.feeds.get(`${f.feedChain}:${feed}`);
+    if (!latest || 'error' in latest) continue; // the price read fails on its own account
+    const feeds = byChain.get(f.feedChain) ?? new Map<string, { windows: Set<number>; from: string }>();
+    const st = feeds.get(feed) ?? { windows: new Set<number>(), from: latest.roundId };
+    st.windows.add(f.window);
+    feeds.set(feed, st);
+    byChain.set(f.feedChain, feeds);
+  }
+  const http = new HTTPClient();
+  for (const [name, feeds] of byChain) {
+    const block = readings.blocks.get(name);
+    if (!block) continue;
+    const list = [...feeds];
+    const count = Math.max(4, Math.floor(ROUND_CALLS_PER_REQUEST / list.length));
+    const reqs = list.map(([feed, st]) => ({ feed, fromRound: st.from, count }));
+    let got: Array<{ rounds: string[] } | { error: string }>;
+    try {
+      got = JSON.parse(
+        http
+          .sendRequest(
+            runtime,
+            roundHistory,
+            consensusIdenticalAggregation<string>(),
+          )({ rpc: chains[name].rpc, reqs, block })
+          .result(),
+      ) as Array<{ rounds: string[] } | { error: string }>;
+    } catch (e) {
+      got = reqs.map(() => ({ error: `history RPC: no consensus (${(e as Error).message})` }));
+    }
+    runtime.log(
+      `${name}: up to ${count} past round(s) of ${list.length} feed(s) read at block ${block} (fixing window)`,
+    );
+    list.forEach(([feed, st], i) => {
+      const h = got[i] ?? { error: 'history RPC: no reading' };
+      for (const w of st.windows) {
+        const key = `${name}:${feed}:${w}`;
+        if ('error' in h) {
+          out.set(key, h);
+          continue;
+        }
+        try {
+          const points: PricePoint[] = roundPoints(h.rounds);
+          const m = timeWeightedMedian(points, nowSec - w, nowSec);
+          out.set(key, m.answer);
+          if (!coversWindow(points, nowSec - w))
+            runtime.log(`${name}: ${feed} fixing over ${m.covered}s of its ${w}s window (${points.length} rounds)`);
+        } catch (e) {
+          out.set(key, { error: `fixing window: ${(e as Error).message}` });
+        }
+      }
+    });
+  }
+  return out;
 }

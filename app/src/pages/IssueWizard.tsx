@@ -15,6 +15,7 @@ import '../issue.css';
 import {
   check,
   canPledgeNow,
+  canWindowFeed,
   collateralTokenOf,
   compileTemplate,
   economicsOf,
@@ -211,6 +212,11 @@ export default function IssueWizard() {
     demoTsla ? { lag: 60, grace: 120 } : null,
   );
   const set = (patch: Partial<ProductParams>) => setP((prev) => ({ ...prev, ...patch }));
+  // A fixing window needs every underlying's price history (stocks only so far): drop it when the choice changes.
+  const windowOk = p.underlyings.every(canWindowFeed);
+  useEffect(() => {
+    if (!windowOk && p.fixingWindowMin) setP((prev) => ({ ...prev, fixingWindowMin: undefined }));
+  }, [windowOk, p.fixingWindowMin]);
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -420,6 +426,8 @@ export default function IssueWizard() {
 
           {step === 2 && (
             <ScheduleStep
+              p={p}
+              set={set}
               sym={sym}
               size={size}
               setSize={setSize}

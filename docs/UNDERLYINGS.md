@@ -21,6 +21,31 @@ value TSLAc… as collateral only (keys `TSLAc`…, never `TSLA`) and are not in
 delivery and for bStock collateral: [CORPORATE-ACTIONS.md](CORPORATE-ACTIONS.md); the tokens:
 [BASE-STOCKS.md](BASE-STOCKS.md).
 
+## Which price a check uses: the latest round, or a fixing window
+
+By default a note's start price and each observation are the feed's **latest round** when the keeper runs, the first
+run after the date (the keeper runs every minute). Dates are the start time plus each period, not the market close. A
+closed market leaves the feed on its last price (accepted up to 4 days old for stocks).
+
+An issuer can instead set a **fixing window** of 15, 30 or 60 minutes (`fixingWindowMin`). Every price the note reads,
+collateral prices included, is then the **time-weighted median** of the feed over that long before the reading: each
+round counts for as long as it was the feed's price, and the fixing is the price at which half the window is reached.
+A spike or dip that lasted less than half the window does not move it, however deep; a price that held does.
+
+- The rule is a term of the note: it is recorded on each oracle field (`window`, seconds) in the definition's
+  metadata, shown on the note's page, and the keeper cannot choose it.
+- The keeper reads the feed's past rounds (`getRoundData`) going back from the latest, at the same block, in one
+  JSON-RPC request: 48 rounds shared by the feeds of the report, the recent ones one by one and then ever further
+  back (`roundOffsets`), so a window crowded with rounds is still covered end to end. Anyone can recompute a fixing
+  from the feed's rounds (`timeWeightedMedian`, packages/core/src/keeper.ts).
+- The latest round is still checked (answered, positive, fresh). If the history cannot be read the report waits for
+  the next run; it never falls back to the latest round.
+- **Stocks only for now** (`canWindowFeed`): the history is read over JSON-RPC, which the keeper has on Robinhood
+  Chain mainnet. Crypto, forex and commodity feeds are read with CRE's EVM capability, whose 15 reads a run are too
+  few for a history. Coinbase's per-token collateral feeds on Base stay on the latest round for the same reason.
+- A Chainlink feed writes a round on a 0.5% move or at its heartbeat, so the median is of those steps, not of every
+  trade. A move that holds for more than half the window is the fixing: the window does not protect against that.
+
 ## What is in it (generated 2026-10-26)
 
 141 feeds:

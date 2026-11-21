@@ -47,6 +47,7 @@ import type { AssetDefinition, AssetOperation, TemplateField } from '../types';
 import {
   cashTokenOf,
   collateralFeed,
+  canWindowFeed,
   collateralMultiplierFeed,
   collateralRefMultiplierFeed,
   collateralTokenOf,
@@ -142,9 +143,13 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
   ];
   const escrowAssets = assets.filter((a) => a.kind === 'cash').map((a) => a.id);
 
+  // `price`: a market price, read through the note's fixing window when it has one and the feed's history can be
+  // read (canWindowFeed); a multiplier is always its current value.
+  const windowSec = (p.fixingWindowMin ?? 0) * 60;
   const oracleField = (
     name: string,
     u: Pick<Underlying, 'feed' | 'feedChain' | 'minPrice' | 'maxPrice' | 'staleness'>,
+    price = false,
   ) =>
     field(name, 'Decimal', {
       oracle: {
@@ -153,6 +158,7 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
         min: num(u.minPrice),
         max: num(u.maxPrice),
         staleness: u.staleness ?? 3600,
+        ...(price && windowSec && canWindowFeed(u) ? { window: windowSec } : {}),
       },
     });
   // Collateral prices ride on the same CRE reports as the observations (USD needs none). Each key has its own feed:
@@ -165,10 +171,10 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
   const priceFields = () =>
     priced.flatMap((c) => {
       const m = collateralMultiplierFeed(c.symbol);
-      if (!m) return [oracleField(priceField(c.symbol), collateralFeed(c.symbol)!)];
+      if (!m) return [oracleField(priceField(c.symbol), collateralFeed(c.symbol)!, true)];
       const r = collateralRefMultiplierFeed(c.symbol);
       return [
-        oracleField(sharePriceField(c.symbol), collateralFeed(c.symbol)!),
+        oracleField(sharePriceField(c.symbol), collateralFeed(c.symbol)!, true),
         oracleField(priceMultField(c.symbol), m),
         ...(r ? [oracleField(priceRefField(c.symbol), r)] : []),
         field(priceField(c.symbol), 'Decimal', {
@@ -210,17 +216,17 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
   const covered = `${coverageExpr} >= required`;
 
   const strikeFields = basket
-    ? unds.map((u) => oracleField(`initialLevel_${u.symbol}`, u))
-    : [oracleField('initialLevel', unds[0])];
+    ? unds.map((u) => oracleField(`initialLevel_${u.symbol}`, u, true))
+    : [oracleField('initialLevel', unds[0], true)];
   const obsFields = (k: number): TemplateField[] => [
     ...(basket
       ? [
-          ...unds.map((u) => oracleField(`obs${k}_${u.symbol}`, u)),
+          ...unds.map((u) => oracleField(`obs${k}_${u.symbol}`, u, true)),
           field(`perf${k}`, 'Decimal', {
             formula: `min(${unds.map((u) => `obs${k}_${u.symbol} / initialLevel_${u.symbol}`).join(', ')})`,
           }),
         ]
-      : [oracleField(`obs${k}`, unds[0])]),
+      : [oracleField(`obs${k}`, unds[0], true)]),
     ...priceFields(),
     ...(k === n
       ? multipliers.flatMap((m) => [

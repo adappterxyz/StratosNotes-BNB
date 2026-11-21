@@ -42,6 +42,7 @@ import {
   checkRound,
   corporateActionHold,
   dueReports,
+  feedToFixed,
   routeFeed,
   tokenMultiplier,
   type DueReport,
@@ -63,7 +64,7 @@ import type { WorkflowDef } from '../../packages/core/src/def-types';
 import { readingToRound } from '../../packages/core/src/feed-rpc';
 import { feedAbi, lensAbi } from '../../packages/sdk/src/evm/abi';
 import { hexToBytes, snapshotToState } from '../../packages/sdk/src/evm/state';
-import { httpFeedChainsSchema, httpFeedReadings } from './http-feeds';
+import { httpFeedChainsSchema, httpFeedReadings, httpWindowFixings } from './http-feeds';
 
 const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
 /** An engine or lens: the zero address means "not deployed yet" and fails the config, closed. */
@@ -296,10 +297,17 @@ export const onCron = (runtime: Runtime<Config>): string => {
     runtime,
     work.flatMap((w) => w.feeds),
   );
+  // Notes with a fixing window: the time-weighted median of each such feed over its window, from its past rounds.
+  const fixings = httpWindowFixings(
+    runtime,
+    httpReadings,
+    work.flatMap((w) => w.feeds),
+    nowSec,
+  );
   // A basket reads one feed per underlying; read each feed at most once per run, whatever needs it.
   const prices = new Map<string, bigint>();
   const price = (f: FeedRef) => {
-    const k = `${f.feedChain}:${f.feed.toLowerCase()}:${f.staleness}`;
+    const k = `${f.feedChain}:${f.feed.toLowerCase()}:${f.staleness}:${f.window ?? 0}`;
     if (!prices.has(k)) {
       // A Robinhood stock token's multiplier (the reference of a delivery or of a bStock price): its uiMultiplier(),
       // never while the issuer is processing a corporate action on it.
@@ -319,8 +327,16 @@ export const onCron = (runtime: Runtime<Config>): string => {
       const reading = httpReadings.feeds.get(`${f.feedChain}:${f.feed.toLowerCase()}`);
       if (reading) {
         const { round, decimals } = readingToRound(reading);
-        prices.set(k, checkRound(round, decimals, nowSec, f.staleness, cfg.finalityAllowanceSec));
+        // The latest round is checked as ever (answered, positive, fresh); with a window, the fixing replaces it.
+        const latest = checkRound(round, decimals, nowSec, f.staleness, cfg.finalityAllowanceSec);
+        if (f.window) {
+          const fix = fixings.get(`${f.feedChain}:${f.feed.toLowerCase()}:${f.window}`);
+          if (fix === undefined || typeof fix !== 'bigint')
+            throw new Error(`${f.field}: ${fix?.error ?? 'no fixing for its window'}`);
+          prices.set(k, feedToFixed(fix, decimals));
+        } else prices.set(k, latest);
       } else {
+        if (f.window) throw new Error(`${f.field}: a fixing window needs an HTTP feed chain (${f.feedChain} is not)`);
         prices.set(k, readFeed(runtime, f, nowSec));
       }
     }

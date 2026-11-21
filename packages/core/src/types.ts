@@ -14,7 +14,8 @@ export interface TemplateField {
   /** A formula over other fields, computed when the step runs. */
   formula?: string;
   /** Delivered by Chainlink CRE from a price feed, checked against these bounds. */
-  oracle?: { feed: string; feedChain?: string; min: string; max: string; staleness?: number };
+  /** `window` (seconds): the price is the time-weighted median of the feed over that long, not its latest round. */
+  oracle?: { feed: string; feedChain?: string; min: string; max: string; staleness?: number; window?: number };
 }
 
 export type AmountSource = 'literal' | 'field' | 'expr';

@@ -211,6 +211,104 @@ export function decodeFeedBatch(body: string, feeds: readonly string[]): FeedRea
   });
 }
 
+/** getRoundData(uint80). */
+export const SELECTOR_GET_ROUND = '0x9a6fc8f5';
+/**
+ * Past rounds one history request asks for, across its feeds. The public Robinhood Chain RPC refuses bursts much
+ * above 60 calls (HTTP 429, measured 2026-11-21), and a run has already spent a few on the prices.
+ */
+export const ROUND_CALLS_PER_REQUEST = 48;
+
+/** A feed's past rounds to read: `count` of them going back from `fromRound` (a proxy round id, decimal string). */
+export interface RoundHistoryRequest {
+  feed: string;
+  fromRound: string;
+  count: number;
+}
+
+/**
+ * How far back each of `count` rounds is from the latest: the first half one by one (0, 1, 2…: exact in any normal
+ * hour, a stock feed writes a few rounds an hour), then 25% further each time, so the same few dozen calls reach
+ * thousands of rounds back. A window crowded with rounds (a violent move writes one per 0.5%) is then still covered
+ * end to end, sampled, where reading consecutive rounds would see nothing but the move itself.
+ */
+export function roundOffsets(count: number): number[] {
+  const out: number[] = [];
+  const dense = Math.ceil(count / 2);
+  for (let i = 0; i < count; i++) {
+    out.push(i < dense ? i : Math.max(out[i - 1] + 1, Math.round(out[i - 1] * 1.25)));
+  }
+  return out;
+}
+
+/** The round ids a request reads, newest first: never below the first round of the proxy's phase (low 64 bits). */
+const roundIds = (r: RoundHistoryRequest): bigint[] => {
+  const from = BigInt(r.fromRound);
+  const inPhase = from & ((1n << 64n) - 1n);
+  return roundOffsets(r.count)
+    .filter((o) => BigInt(o) < inPhase)
+    .map((o) => from - BigInt(o));
+};
+
+/** The JSON-RPC batch body reading past rounds: getRoundData of each request's rounds, ids running on in order. */
+export function roundHistoryBody(reqs: readonly RoundHistoryRequest[], blockTag: FeedBlockTag | string): string {
+  let id = 0;
+  return JSON.stringify(
+    reqs.flatMap((r) =>
+      roundIds(r).map((round) => ({
+        jsonrpc: '2.0',
+        id: id++,
+        method: 'eth_call',
+        params: [{ to: r.feed, data: SELECTOR_GET_ROUND + round.toString(16).padStart(64, '0') }, blockTag],
+      })),
+    ),
+  );
+}
+
+/**
+ * Decode a roundHistoryBody reply: per request, its rounds newest first as "updatedAt:answer" decimal strings
+ * (consensus-safe and compact). A round that is missing, failed or empty is left out; a request with none is an
+ * error (the fixing then waits for the next run), and so is a reply that is not a batch (a refused request).
+ */
+export function decodeRoundHistory(
+  body: string,
+  reqs: readonly RoundHistoryRequest[],
+): Array<{ rounds: string[] } | { error: string }> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return reqs.map(() => ({ error: 'history RPC: reply is not JSON' }));
+  }
+  if (!Array.isArray(parsed)) {
+    const code = (parsed as { error?: { code?: number } } | null)?.error?.code;
+    return reqs.map(() => ({ error: `history RPC: batch refused${code !== undefined ? ` (code ${code})` : ''}` }));
+  }
+  const byId = new Map<number, { result?: unknown }>();
+  for (const r of parsed as Array<{ id?: unknown; result?: unknown }>) {
+    if (r && typeof r.id === 'number') byId.set(r.id, r);
+  }
+  let id = 0;
+  return reqs.map((req) => {
+    const rounds: string[] = [];
+    for (let k = roundIds(req).length; k > 0; k--) {
+      const hex = byId.get(id++)?.result;
+      if (typeof hex !== 'string' || !/^0x[0-9a-fA-F]*$/.test(hex) || hex.length < 2 + 64 * 5) continue;
+      const answer = signed(word(hex, 1));
+      const updatedAt = word(hex, 3);
+      if (updatedAt !== 0n && answer > 0n) rounds.push(`${updatedAt}:${answer}`);
+    }
+    return rounds.length ? { rounds } : { error: 'history RPC: no past round could be read' };
+  });
+}
+
+/** "updatedAt:answer" strings (decodeRoundHistory) as price points. */
+export const roundPoints = (rounds: readonly string[]): Array<{ at: number; answer: bigint }> =>
+  rounds.map((r) => {
+    const [at, answer] = r.split(':');
+    return { at: Number(at), answer: BigInt(answer) };
+  });
+
 /** A reading as checkRound's input; throws the reading's error. */
 export function readingToRound(r: FeedReading): {
   round: { roundId: bigint; answer: bigint; updatedAt: bigint; answeredInRound: bigint };

@@ -50,6 +50,7 @@ import {
   type BStockSymbol,
 } from './bnb-stocks';
 import { ASSET_CLASSES } from './feed-directory';
+import { HTTP_FEED_CHAINS } from '../feed-rpc';
 import { isRhStockTicker, refMultiplierField, rhMultiplierFeed } from './robinhood-tokens';
 import { FEED_CATALOGUE, type CatalogueFeed, type CatalogueSymbol } from './feeds-catalogue';
 
@@ -119,6 +120,13 @@ export interface ProductParams {
   collateralRatioPct?: number;
   /** Days from an observation to its payment date (default; set per issuance, in seconds, at Approve Terms). */
   settlementLagDays?: number;
+  /**
+   * Fixing window, minutes (absent or 0: the latest Chainlink round). Every price the note reads (start price,
+   * observations, collateral prices) is then the time-weighted median of its feed over that long before the
+   * reading, so a wick shorter than half the window cannot set a fixing (FIXING_WINDOWS, keeper.ts
+   * timeWeightedMedian). Only for feeds whose history the keeper can read (canWindowFeed).
+   */
+  fixingWindowMin?: number;
   /** Days of grace after a missed payment date or margin call, 0–7 (default; set per issuance). */
   gracePeriodDays?: number;
   /**
@@ -926,6 +934,15 @@ export function validateTermSheet(p: ProductParams): string[] {
     e.push('The collateral ratio must be between 0 and 1,000% of the outstanding notional.');
   if (!(eco.settlementLagDays >= 0 && eco.settlementLagDays <= 30))
     e.push('The settlement lag must be between 0 and 30 days.');
+  if (p.fixingWindowMin) {
+    if (!(FIXING_WINDOWS as readonly number[]).includes(p.fixingWindowMin))
+      e.push(`The fixing window must be one of ${FIXING_WINDOWS.filter(Boolean).join(', ')} minutes, or none.`);
+    const no = (p.underlyings ?? []).filter((u) => !canWindowFeed(u)).map((u) => u.symbol);
+    if (no.length)
+      e.push(
+        `A fixing window needs the price history of every underlying: not available yet for ${joinList(no, 'and')} (stocks only for now).`,
+      );
+  }
   if (isRemoteCollateral(p) && !remoteCollateralOf(p))
     e.push(
       p.collateralChain === noteChainOf(p)
@@ -1213,6 +1230,20 @@ export const EXAMPLE_PRODUCTS: Record<ProductType, ProductParams> = {
     participationPct: 50,
   },
 };
+
+/** Fixing windows an issuer can choose, minutes (0: the latest round). */
+export const FIXING_WINDOWS = [0, 15, 30, 60] as const;
+/**
+ * Whether the keeper can read a feed's past rounds, which a fixing window needs: only on the feed chains read over
+ * JSON-RPC (HTTP_FEED_CHAINS: Robinhood Chain mainnet, i.e. every stock), where one request brings a hundred rounds.
+ * CRE's EVM read budget (15 a run) is too small for a history on the other chains.
+ */
+export const canWindowFeed = (f: { feedChain: string }): boolean => f.feedChain in HTTP_FEED_CHAINS;
+/** The fixing rule of these terms in plain words, or '' for the latest price. */
+export const fixingRuleText = (p: Pick<ProductParams, 'fixingWindowMin'>): string =>
+  p.fixingWindowMin
+    ? `Each price is the time-weighted median of the Chainlink feed over the ${p.fixingWindowMin} minutes before the check, so a brief spike or dip does not set it.`
+    : '';
 
 /**
  * What a reader of these terms should know about the stock tokens in them (docs/CORPORATE-ACTIONS.md), in plain
