@@ -139,19 +139,17 @@ export async function readFeed(cfg: FallbackConfig, f: FeedRef, nowSec: number):
   const points: PricePoint[] = [];
   for (let i = 0; i < ids.length; i += 12) {
     const rounds = await Promise.all(
-      ids
-        .slice(i, i + 12)
-        .map((id) =>
-          client
-            .readContract({
-              address: f.feed as Address,
-              abi: roundAbi,
-              functionName: 'getRoundData',
-              args: [id],
-              ...block,
-            })
-            .catch(() => null),
-        ),
+      ids.slice(i, i + 12).map((id) =>
+        client
+          .readContract({
+            address: f.feed as Address,
+            abi: roundAbi,
+            functionName: 'getRoundData',
+            args: [id],
+            ...block,
+          })
+          .catch(() => null),
+      ),
     );
     for (const r of rounds) if (r && r[3] !== 0n && r[1] > 0n) points.push({ at: Number(r[3]), answer: r[1] });
   }
