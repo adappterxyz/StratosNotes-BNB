@@ -237,3 +237,8 @@ export function inTime(at: number, now: number) {
   const m = Math.max(1, Math.round(s / 60));
   return `in ${m} minute${m === 1 ? '' : 's'}`;
 }
+
+/** A note started but whose terms its issuer never approved: it was never offered, so lists leave it out. */
+export function neverIssued(v: { notional: number; activeSteps: string[] }): boolean {
+  return v.notional === 0 && v.activeSteps.length === 1 && v.activeSteps[0] === 'Task_ApproveTerms';
+}

@@ -14,6 +14,8 @@ import {
 
 type NoteRow = {
   view?: {
+    notional?: number;
+    activeSteps?: string[];
     reports?: { cre?: number };
     economics?: { periods?: Array<{ status?: string }> };
   };
@@ -91,7 +93,12 @@ export default function Numbers() {
         const r = await fetch(`/api/notes${next ? `?cursor=${encodeURIComponent(next)}` : ''}`);
         if (!r.ok) break;
         const d = (await r.json()) as { notes?: NoteRow[]; next?: string | null };
-        rows.push(...(d.notes ?? []));
+        // Started but never approved by its issuer: not an issued note.
+        rows.push(
+          ...(d.notes ?? []).filter(
+            (x) => !(x.view?.notional === 0 && x.view?.activeSteps?.[0] === 'Task_ApproveTerms'),
+          ),
+        );
         if (!d.next) break;
         next = d.next;
       }

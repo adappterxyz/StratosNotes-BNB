@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { EXAMPLE_WORST_OF, FEEDS } from '@sn/core';
 import { cashSymbol, chainName, engineOf, issueChains, useChains } from '../lib/chains';
-import { listingOf } from '../lib/listing';
+import { listingOf, neverIssued } from '../lib/listing';
 import { useNotes, useNow } from '../lib/live';
 import { statusOf } from '../lib/story';
 import { NoteCard } from '../components/NoteCard';
@@ -55,19 +55,22 @@ export default function Marketplace() {
 
   const all = useMemo(
     () =>
-      (notes ?? []).map((n) => {
-        const cash = cashOf(n.chain, n.view.cashToken);
-        const st = statusOf(n.view, cash).key;
-        const group: Show =
-          st === 'open' && !earlier(n.id) ? 'open' : st === 'open' || st === 'running' ? 'running' : 'finished';
-        return {
-          n,
-          cash,
-          st,
-          group,
-          l: listingOf(n.view.params, { strikeDate: n.view.strikeDate, obsDates: n.view.obsDates }, cash),
-        };
-      }),
+      // A note whose terms were never approved (started, then abandoned) was never offered: not listed.
+      (notes ?? [])
+        .filter((n) => !neverIssued(n.view))
+        .map((n) => {
+          const cash = cashOf(n.chain, n.view.cashToken);
+          const st = statusOf(n.view, cash).key;
+          const group: Show =
+            st === 'open' && !earlier(n.id) ? 'open' : st === 'open' || st === 'running' ? 'running' : 'finished';
+          return {
+            n,
+            cash,
+            st,
+            group,
+            l: listingOf(n.view.params, { strikeDate: n.view.strikeDate, obsDates: n.view.obsDates }, cash),
+          };
+        }),
     [notes], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const matches = (x: (typeof all)[number], ignoreShow = false) => {
