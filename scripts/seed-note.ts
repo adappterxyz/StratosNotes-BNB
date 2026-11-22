@@ -4,6 +4,7 @@
  *
  *   NOTE=crypto STRIKE_IN=900 OBS_EVERY=300 npx tsx scripts/seed-note.ts
  *   NOTE=equity npx tsx scripts/seed-note.ts
+ *   NOTE=equity FIXING_WINDOW=15 npx tsx scripts/seed-note.ts   (wick-resistant fixing: a 15-minute median)
  *
  * CHAIN=robinhood-testnet (default) or CHAIN=base-sepolia; RPC overrides its RPC, e.g. a local fork with DEPLOY_DIR
  * naming its deployment. NOTE=crypto: a worst-of phoenix on ETH and BTC; NOTE=equity: on TSLA and NVDA,
@@ -139,6 +140,12 @@ const base: ProductParams =
         underlyings: [FEEDS.ETH, FEEDS.BTC],
         observations: 3,
       };
+// FIXING_WINDOW=15|30|60: every price is the time-weighted median of the feed over that many minutes (stocks only).
+const fixingWindowMin = Number(process.env.FIXING_WINDOW ?? 0);
+if (fixingWindowMin) {
+  base.fixingWindowMin = fixingWindowMin as ProductParams['fixingWindowMin'];
+  base.name = `${base.name}, ${fixingWindowMin}-min fixing`;
+}
 // On Base the term sheet names its chain (cash USDC); a Robinhood Chain note leaves it out.
 const product = withChain(base, chainKey);
 const prod = instantiateProduct(product);
