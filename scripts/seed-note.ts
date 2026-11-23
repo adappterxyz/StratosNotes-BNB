@@ -169,6 +169,20 @@ const pledge = Math.ceil(notional * ratio);
 console.log(
   `${product.name} on ${chainKey}: ${notional} units (${unsold} left for visitors), ${pledge} ${CASH} collateral pledged (ratio ${ratio * 100}%)`,
 );
+// Before anything is started: a note started and not approved cannot be cancelled.
+if (usdg) {
+  const need = BigInt(pledge + subs.reduce((x, y) => x + y, 0)) * 10n ** 6n;
+  const have = await client.readContract({
+    address: tusd,
+    abi: erc20,
+    functionName: 'balanceOf',
+    args: [deployer.address],
+  });
+  if (have < need)
+    throw new Error(
+      `the deployer holds ${Number(have) / 1e6} ${STABLE}; this seed needs ${Number(need) / 1e6} (collateral + investors): claim more at ${CASH_FAUCETS[chainKey]}`,
+    );
+}
 // Both are content-addressed and idempotent: re-running for the same design is a cheap no-op.
 await send(deployer, { address: dep.engine, abi: engineAbi, functionName: 'registerDefinition', args: [def] });
 await send(deployer, { address: dep.lens, abi: lensAbi, functionName: 'publish', args: [def] });

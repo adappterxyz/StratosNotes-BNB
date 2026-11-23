@@ -1,0 +1,34 @@
+{
+  "chain": "robinhood-testnet",
+  "pid": "8",
+  "name": "Demo Worst-of Phoenix on ETH, BTC, 15-min fixing, 5% disruption limit",
+  "definition": "0xd7ae88cf07216635a696310880d4eb53778d408c56d84fd41f1fdda9a9a7401a",
+  "engine": "0xCba17Fe422220AeCa3EE06D15BE4aA5a1F06D4eE",
+  "fromBlock": "157021425",
+  "cash": "USDG",
+  "ratio": 1,
+  "issuer": {
+    "address": "0x298afB9424188C7eA7c01556D8CAE6ff4768de0a",
+    "label": "notes.markets demo issuer (temporary: deployer key)"
+  },
+  "strikeAt": 1795438032,
+  "obsAt": [
+    1795438632,
+    1795439232,
+    1795439832
+  ],
+  "lag": 150,
+  "grace": 200,
+  "pledge": 15,
+  "investors": [
+    {
+      "address": "0xAce907325A6331D1f996D6f8CfA23D353213aA02",
+      "units": 6
+    },
+    {
+      "address": "0x30D8527aa8024fe8C7E74B56425C1a214dBD36d5",
+      "units": 3
+    }
+  ],
+  "unsold": 6
+}
