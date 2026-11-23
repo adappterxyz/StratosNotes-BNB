@@ -154,7 +154,9 @@ Robinhood Chain backing a note on another chain) in [CROSS-CHAIN.md](CROSS-CHAIN
 - **bStock prices.** A bStock on BNB Chain is valued from the stock's Chainlink price and the token's multiplier, not
   from its own market price; the two can differ, mostly when the US market is closed.
 - **One price per check.** A check uses the feed's latest price, or, if the issuer sets a fixing window (15 to 60
-  minutes, stocks only so far), the time-weighted median over it, so a brief spike does not set a fixing
+  minutes), the time-weighted median over it, so a brief spike does not set a fixing. Options on top: a closing
+  price for US stocks (the token's price at 16:00 New York, not the exchange's official close; no holiday calendar)
+  and a disruption rule that postpones a check during a violent move, at most twice
   ([UNDERLYINGS.md](UNDERLYINGS.md)).
 - **Margin** is checked at each observation, not continuously.
 - **Email checks can be bypassed in principle.** The email requirement is on-chain, but the attestation is signed by

@@ -5,6 +5,7 @@
  *   NOTE=crypto STRIKE_IN=900 OBS_EVERY=300 npx tsx scripts/seed-note.ts
  *   NOTE=equity npx tsx scripts/seed-note.ts
  *   NOTE=equity FIXING_WINDOW=15 npx tsx scripts/seed-note.ts   (wick-resistant fixing: a 15-minute median)
+ *   NOTE=crypto FIXING_WINDOW=15 DISRUPTION=10 LAG=1900 ...     (and the disruption rule: LAG must cover 2 windows)
  *
  * CHAIN=robinhood-testnet (default) or CHAIN=base-sepolia; RPC overrides its RPC, e.g. a local fork with DEPLOY_DIR
  * naming its deployment. NOTE=crypto: a worst-of phoenix on ETH and BTC; NOTE=equity: on TSLA and NVDA,
@@ -145,6 +146,12 @@ const fixingWindowMin = Number(process.env.FIXING_WINDOW ?? 0);
 if (fixingWindowMin) {
   base.fixingWindowMin = fixingWindowMin as ProductParams['fixingWindowMin'];
   base.name = `${base.name}, ${fixingWindowMin}-min fixing`;
+}
+// DISRUPTION=5|10|20 (with FIXING_WINDOW): a check is postponed while a price moved more than that % in the window.
+const disruptionPct = Number(process.env.DISRUPTION ?? 0);
+if (disruptionPct) {
+  base.disruptionPct = disruptionPct;
+  base.name = `${base.name}, ${disruptionPct}% disruption limit`;
 }
 // On Base the term sheet names its chain (cash USDC); a Robinhood Chain note leaves it out.
 const product = withChain(base, chainKey);

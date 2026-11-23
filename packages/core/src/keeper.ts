@@ -55,6 +55,11 @@ export interface FeedRef {
    * over the window before the reading (timeWeightedMedian): a wick shorter than half the window does not move it.
    */
   window?: number;
+  /**
+   * Disruption limit, basis points (absent: none). With a window: when the feed's low and high inside the window are
+   * further apart than this, the fixing is postponed by one window (stepFixing).
+   */
+  disruption?: number;
 }
 
 export interface DueReport {
@@ -65,17 +70,22 @@ export interface DueReport {
   stepId: string;
   /** One per oracle capture, in capture order (empty for STEP_ADVANCE). */
   feeds: FeedRef[];
+  /** When the step fell due (its date timer, unix seconds): a fixing window ends there. Absent without a date. */
+  at?: number;
 }
 
 /** Where each oracle field's feed is, from the definition's metadata (packages/core/src/compile.ts). */
 export function oracleFeeds(
   def: WorkflowDef,
-): Record<string, { feed: string; feedChain?: string; staleness?: number; window?: number }> {
+): Record<string, { feed: string; feedChain?: string; staleness?: number; window?: number; disruption?: number }> {
   try {
     return (
       (
         JSON.parse(def.meta) as {
-          oracles?: Record<string, { feed: string; feedChain?: string; staleness?: number; window?: number }>;
+          oracles?: Record<
+            string,
+            { feed: string; feedChain?: string; staleness?: number; window?: number; disruption?: number }
+          >;
         }
       ).oracles ?? {}
     );
@@ -157,11 +167,19 @@ export function dueReports(p: ProcessState, def: WorkflowDef, nowSec: number): D
             feedChain: o.feedChain ?? 'ethereum-mainnet',
             staleness: o.staleness ?? 3600,
             ...(o.window ? { window: o.window } : {}),
+            ...(o.window && o.disruption ? { disruption: o.disruption } : {}),
           }
         : null;
     });
     if (feeds.some((f) => !f)) continue; // a capture with no recorded feed cannot be observed
-    out.push({ process: p.id, definition: p.definition, step: t, stepId: s.id, feeds: feeds as FeedRef[] });
+    out.push({
+      process: p.id,
+      definition: p.definition,
+      step: t,
+      stepId: s.id,
+      feeds: feeds as FeedRef[],
+      ...(Number.isFinite(at) ? { at } : {}),
+    });
   }
   if (advance && !out.length)
     out.push({ process: p.id, definition: p.definition, step: STEP_ADVANCE, stepId: 'advance', feeds: [] });
@@ -184,6 +202,7 @@ export function routeFeed(f: FeedRef, routes: FeedRoutes | undefined): FeedRef {
         feedChain: r.feedChain,
         staleness: r.staleness ?? f.staleness,
         ...(f.window ? { window: f.window } : {}),
+        ...(f.disruption ? { disruption: f.disruption } : {}),
       }
     : f;
 }
@@ -287,3 +306,80 @@ export function timeWeightedMedian(
 
 /** Whether the rounds given reach back to the start of the window (the oldest is at or before `from`). */
 export const coversWindow = (points: readonly PricePoint[], from: number): boolean => points.some((p) => p.at <= from);
+
+/** How many times a disrupted fixing is postponed (one window each) before it is taken regardless. */
+export const DISRUPTION_MAX_POSTPONEMENTS = 2;
+
+/**
+ * Whether a feed was disrupted over [from, to]: the lowest and the highest of the rounds in effect inside the window
+ * (the one live at `from`, and every round written up to `to`) are more than `bps` basis points apart, measured on
+ * the lowest. Unlike the median, one extreme round is enough: it is what the rule is for.
+ */
+export function windowDisrupted(points: readonly PricePoint[], from: number, to: number, bps: number): boolean {
+  const pts = points.filter((p) => p.at <= to).sort((a, b) => a.at - b.at);
+  const before = pts.filter((p) => p.at <= from);
+  const inEffect = [...before.slice(-1), ...pts.filter((p) => p.at > from)];
+  if (inEffect.length < 2) return false;
+  let min = inEffect[0].answer,
+    max = inEffect[0].answer;
+  for (const p of inEffect) {
+    if (p.answer < min) min = p.answer;
+    if (p.answer > max) max = p.answer;
+  }
+  return min > 0n && (max - min) * 10_000n > BigInt(bps) * min;
+}
+
+export interface StepFixing {
+  /** One fixing per history given, feed decimals. */
+  answers: bigint[];
+  /** The end of the window used (unix seconds). */
+  at: number;
+  /** Windows the fixing was postponed by (disruption rule). */
+  postponed: number;
+  /** The window used was still disrupted: the postponements ran out and the fixing was taken regardless. */
+  disrupted: boolean;
+  /** The window ends at the step's scheduled time (plus postponements), not at the reading. */
+  anchored: boolean;
+}
+
+/**
+ * The windowed fixings of one step (one history per feed, all fixed over the SAME window), or why it must wait.
+ *
+ *  - The window ends at the step's scheduled time `dueAt`, so the fixing does not depend on when the keeper ran: a
+ *    closing-price note fixes over the minutes before the close even when its report lands a minute later. When the
+ *    histories read do not reach back to the start of that window (the keeper is hours late on a busy feed), or the
+ *    step has no date, the window ends at the reading (`nowSec`) instead.
+ *  - Disruption rule (`disruptionBps`): if any feed is disrupted over the window (windowDisrupted), the fixing is
+ *    postponed by one window, at most DISRUPTION_MAX_POSTPONEMENTS times, then taken regardless. A postponed window
+ *    that has not ended yet returns `wait`: the keeper retries every run.
+ */
+export function stepFixing(
+  histories: ReadonlyArray<readonly PricePoint[]>,
+  o: { window: number; nowSec: number; dueAt?: number; disruptionBps?: number },
+): StepFixing | { wait: string; retryAt: number } {
+  const w = o.window;
+  const bps = o.disruptionBps ?? 0;
+  const disruptedAt = (a: number) => bps > 0 && histories.some((h) => windowDisrupted(h, a - w, a, bps));
+  const fix = (a: number, postponed: number, anchored: boolean): StepFixing => ({
+    answers: histories.map((h) => timeWeightedMedian(h, a - w, a).answer),
+    at: a,
+    postponed,
+    disrupted: disruptedAt(a),
+    anchored,
+  });
+  const due = o.dueAt;
+  const anchored = due !== undefined && due <= o.nowSec && histories.every((h) => coversWindow(h, due - w));
+  if (anchored) {
+    for (let k = 0; ; k++) {
+      const a = due + k * w;
+      if (a > o.nowSec)
+        return { wait: `fixing postponed ${k} time(s) by the disruption rule: next window ends at ${a}`, retryAt: a };
+      if (k >= DISRUPTION_MAX_POSTPONEMENTS || !disruptedAt(a)) return fix(a, k, true);
+    }
+  }
+  // Rolling: the window before the reading. Still postponed while disrupted, until the last postponed window ends.
+  const last = due === undefined ? -Infinity : due + DISRUPTION_MAX_POSTPONEMENTS * w;
+  if (disruptedAt(o.nowSec) && o.nowSec < last)
+    return { wait: `fixing waits by the disruption rule (until ${last} at the latest)`, retryAt: last };
+  return fix(o.nowSec, 0, false);
+}

@@ -15,7 +15,7 @@ import {
   feedToFixed,
   ROUND_CALLS_PER_REQUEST,
   roundOffsets,
-  timeWeightedMedian,
+  stepFixing,
   type PricePoint,
   isRhMultiplierRef,
   rhTokenOfFeed,
@@ -74,7 +74,23 @@ const stockTokenAbi = [
   { type: 'function', name: 'oraclePaused', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
 ] as const;
 
-export async function readFeed(cfg: FallbackConfig, f: FeedRef, nowSec: number): Promise<bigint> {
+/**
+ * A feed's price (engine fixed point) or, with `history`, its latest round checked and its past rounds for the
+ * step's windowed fixing (the same rounds as the CRE keeper: roundOffsets back from the latest).
+ */
+export async function readFeed(cfg: FallbackConfig, f: FeedRef, nowSec: number): Promise<bigint>;
+export async function readFeed(
+  cfg: FallbackConfig,
+  f: FeedRef,
+  nowSec: number,
+  history: true,
+): Promise<{ points: PricePoint[]; decimals: number }>;
+export async function readFeed(
+  cfg: FallbackConfig,
+  f: FeedRef,
+  nowSec: number,
+  history?: true,
+): Promise<bigint | { points: PricePoint[]; decimals: number }> {
   const client = cfg.feedClients[f.feedChain];
   if (!client) throw new Error(`no RPC for feed chain ${f.feedChain}`);
   const at = cfg.feedReadAt?.[f.feedChain];
@@ -129,9 +145,9 @@ export async function readFeed(cfg: FallbackConfig, f: FeedRef, nowSec: number):
     f.staleness,
     cfg.finalityAllowanceSec,
   );
-  if (!f.window) return latest;
-  // A fixing window, as the CRE keeper: the time-weighted median of the feed's rounds over the window, the same
-  // rounds (roundOffsets back from the latest, never below the first of the proxy's phase) at the same block.
+  if (!history) return latest;
+  // The past rounds a fixing window needs, as the CRE keeper reads them (roundOffsets back from the latest, never
+  // below the first of the proxy's phase) at the same block.
   const inPhase = roundId & ((1n << 64n) - 1n);
   const ids = roundOffsets(ROUND_CALLS_PER_REQUEST)
     .filter((o) => BigInt(o) < inPhase)
@@ -154,7 +170,7 @@ export async function readFeed(cfg: FallbackConfig, f: FeedRef, nowSec: number):
     for (const r of rounds) if (r && r[3] !== 0n && r[1] > 0n) points.push({ at: Number(r[3]), answer: r[1] });
   }
   if (!points.length) throw new Error(`${f.field}: no past round could be read (fixing window)`);
-  return feedToFixed(timeWeightedMedian(points, nowSec - f.window, nowSec).answer, decimals);
+  return { points, decimals };
 }
 
 export interface RunResult {
@@ -190,8 +206,31 @@ export async function runOnce(cfg: FallbackConfig, nowSec = Math.floor(Date.now(
   for (const d of due.slice(0, cfg.maxReportsPerRun) as DueReport[]) {
     const tag = `${c.name} pid ${d.process} ${d.stepId}`;
     try {
+      const feeds = d.feeds.map((f) => routeFeed(f, cfg.feedRoutes));
+      // The step's windowed feeds are fixed over one window, as the CRE keeper does (stepFixing): ending at the
+      // step's date, postponed together by the disruption rule.
+      const windowed = feeds.filter((f) => f.window && !isRhMultiplierRef(f));
+      const fixes = new Map<FeedRef, bigint>();
+      if (windowed.length) {
+        const hs: Array<{ points: PricePoint[]; decimals: number }> = [];
+        for (const f of windowed) hs.push(await readFeed(cfg, f, nowSec, true));
+        const fx = stepFixing(
+          hs.map((h) => h.points),
+          {
+            window: Math.max(...windowed.map((f) => f.window!)),
+            nowSec,
+            dueAt: d.at,
+            disruptionBps: windowed.find((f) => f.disruption)?.disruption,
+          },
+        );
+        if ('wait' in fx) {
+          cfg.log(`${tag} -> waits: ${fx.wait}`);
+          continue;
+        }
+        windowed.forEach((f, i) => fixes.set(f, feedToFixed(fx.answers[i], hs[i].decimals)));
+      }
       const values: bigint[] = [];
-      for (const f of d.feeds) values.push(await price(routeFeed(f, cfg.feedRoutes)));
+      for (const f of feeds) values.push(fixes.get(f) ?? (await price(f)));
       const hash = await c.wallet.writeContract({
         address: c.engine,
         abi: engineAbi,

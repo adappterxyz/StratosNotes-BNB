@@ -158,7 +158,9 @@ export function instantiateProduct(p: ProductParams): InstantiatedProduct {
         min: num(u.minPrice),
         max: num(u.maxPrice),
         staleness: u.staleness ?? 3600,
-        ...(price && windowSec && canWindowFeed(u) ? { window: windowSec } : {}),
+        ...(price && windowSec && canWindowFeed(u)
+          ? { window: windowSec, ...(p.disruptionPct ? { disruption: Math.round(p.disruptionPct * 100) } : {}) }
+          : {}),
       },
     });
   // Collateral prices ride on the same CRE reports as the observations (USD needs none). Each key has its own feed:

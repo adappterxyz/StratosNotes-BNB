@@ -330,7 +330,10 @@ export function compile(ir: WorkflowIR, meta: unknown = {}): Compiled {
 
   if (issues.length) throw new CompileError(issues);
   // Which price feed backs each oracle field: the CRE workflow reads it here.
-  const oracles: Record<string, { feed: string; feedChain?: string; staleness?: number; window?: number }> = {};
+  const oracles: Record<
+    string,
+    { feed: string; feedChain?: string; staleness?: number; window?: number; disruption?: number }
+  > = {};
   for (const n of ir.nodes)
     for (const f of n.props.templateFields ?? []) {
       if (f.oracle)
@@ -339,6 +342,7 @@ export function compile(ir: WorkflowIR, meta: unknown = {}): Compiled {
           ...(f.oracle.feedChain ? { feedChain: f.oracle.feedChain } : {}),
           ...(f.oracle.staleness ? { staleness: f.oracle.staleness } : {}),
           ...(f.oracle.window ? { window: f.oracle.window } : {}),
+          ...(f.oracle.window && f.oracle.disruption ? { disruption: f.oracle.disruption } : {}),
         };
     }
   const def: WorkflowDef = {

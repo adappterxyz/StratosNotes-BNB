@@ -24,27 +24,60 @@ delivery and for bStock collateral: [CORPORATE-ACTIONS.md](CORPORATE-ACTIONS.md)
 ## Which price a check uses: the latest round, or a fixing window
 
 By default a note's start price and each observation are the feed's **latest round** when the keeper runs, the first
-run after the date (the keeper runs every minute). Dates are the start time plus each period, not the market close. A
+run after the date (the keeper runs every minute). Dates are the start time plus each period (a closing-price note sets them at the US close, below). A
 closed market leaves the feed on its last price (accepted up to 4 days old for stocks).
 
 An issuer can instead set a **fixing window** of 15, 30 or 60 minutes (`fixingWindowMin`). Every price the note reads,
-collateral prices included, is then the **time-weighted median** of the feed over that long before the reading: each
-round counts for as long as it was the feed's price, and the fixing is the price at which half the window is reached.
-A spike or dip that lasted less than half the window does not move it, however deep; a price that held does.
+collateral prices included, is then the **time-weighted median** of the feed over that window: each round counts for
+as long as it was the feed's price, and the fixing is the price at which half the window is reached. A spike or dip
+that lasted less than half the window does not move it, however deep; a price that held does.
 
-- The rule is a term of the note: it is recorded on each oracle field (`window`, seconds) in the definition's
-  metadata, shown on the note's page, and the keeper cannot choose it.
-- The keeper reads the feed's past rounds (`getRoundData`) going back from the latest, at the same block, in one
-  JSON-RPC request: 48 rounds shared by the feeds of the report, the recent ones one by one and then ever further
-  back (`roundOffsets`), so a window crowded with rounds is still covered end to end. Anyone can recompute a fixing
-  from the feed's rounds (`timeWeightedMedian`, packages/core/src/keeper.ts).
+- **The window ends at the check's scheduled time**, not when the keeper runs, so a fixing does not depend on when
+  the report landed and anyone can recompute it (`stepFixing`, packages/core/src/keeper.ts). Every price of one check
+  is fixed over the same window. If the keeper is so late that the rounds it reads no longer reach back to that
+  window, or the step has no date, the window before the reading is used instead.
+- The rule is a term of the note: it is recorded on each oracle field (`window`, seconds, and `disruption`, basis
+  points) in the definition's metadata, shown on the note's page, and the keeper cannot choose it.
+- The keeper reads the feed's past rounds (`getRoundData`) going back from the latest in one JSON-RPC request per
+  feed chain: 48 rounds shared by the feeds of the run, the recent ones one by one and then ever further back
+  (`roundOffsets`), so a window crowded with rounds is still covered end to end.
 - The latest round is still checked (answered, positive, fresh). If the history cannot be read the report waits for
   the next run; it never falls back to the latest round.
-- **Stocks only for now** (`canWindowFeed`): the history is read over JSON-RPC, which the keeper has on Robinhood
-  Chain mainnet. Crypto, forex and commodity feeds are read with CRE's EVM capability, whose 15 reads a run are too
-  few for a history. Coinbase's per-token collateral feeds on Base stay on the latest round for the same reason.
-- A Chainlink feed writes a round on a 0.5% move or at its heartbeat, so the median is of those steps, not of every
-  trade. A move that holds for more than half the window is the fixing: the window does not protect against that.
+- **Where it works** (`canWindowFeed`): stocks (Robinhood Chain mainnet, read over JSON-RPC at the block of the
+  latest round) and crypto, forex and gold on Ethereum and Arbitrum (`HISTORY_FEED_CHAINS`: CRE reads the latest
+  round with its EVM capability, then the history over the HTTP capability from the chain's public RPC, or the
+  keeper's `historyRpcs`; past rounds never change, so the nodes agree whatever block they read at). Coinbase's
+  per-token collateral feeds on Base stay on the latest round.
+- A Chainlink feed writes a round on a set move (0.5% on most) or at its heartbeat, so the median is of those steps,
+  not of every trade. A move that holds for more than half the window is the fixing: the window does not protect
+  against that.
+
+### Closing price (US stocks)
+
+`fixingAt: 'close'` makes a closing-price note: the wizard sets the book close and every check at the **US market
+close, 16:00 New York**, of a weekday (`usCloseOnOrAfter`, following daylight saving), and each price is the median
+over the window ending at that time (15 minutes by default). Stocks only (`canCloseFeed`).
+
+- The feed is the price of Robinhood's stock token, which trades 24/5. The fixing is the token's price at the close,
+  not the exchange's official closing print; the two can differ slightly.
+- Exchange holidays and half days are not in the calendar. On a holiday the feed stands at the last close, so the
+  check reads it. On a half day (13:00 close) the check reads the token's after-hours price at 16:00.
+- The dates are inputs of the issuance (Approve Terms), as for any note: the engine does not check that they sit on
+  a close. A closing-price note is checked at most once a day.
+
+### Disruption rule
+
+`disruptionPct` (5, 10 or 20; needs a fixing window) is the market disruption clause of a traditional note. If any
+price of a check moved more than that between its **low and its high inside the window** (`windowDisrupted`: the
+round in effect at the window's start and every round written in it; one extreme round is enough), the check is
+**postponed by one window**, at most twice (`DISRUPTION_MAX_POSTPONEMENTS`), then taken regardless. The keeper retries
+every run and writes nothing while a postponed window has not ended.
+
+- One disrupted underlying postpones the whole check: a basket is always fixed over one window.
+- **Payment dates do not move.** A payment is due at the check's scheduled date plus the settlement lag, so a
+  postponed check leaves the issuer less time to fund it. The wizard requires the lag to be at least the longest
+  postponement (two windows).
+- The limit is measured on the feed's rounds, so a move smaller than the feed's step between rounds is not seen.
 
 ## What is in it (generated 2026-10-26)
 

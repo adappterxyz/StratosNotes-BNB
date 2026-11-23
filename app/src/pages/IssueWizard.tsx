@@ -15,6 +15,7 @@ import '../issue.css';
 import {
   check,
   canPledgeNow,
+  canCloseFeed,
   canWindowFeed,
   collateralTokenOf,
   compileTemplate,
@@ -212,11 +213,15 @@ export default function IssueWizard() {
     demoTsla ? { lag: 60, grace: 120 } : null,
   );
   const set = (patch: Partial<ProductParams>) => setP((prev) => ({ ...prev, ...patch }));
-  // A fixing window needs every underlying's price history (stocks only so far): drop it when the choice changes.
+  // A fixing window needs every underlying's price history, and a closing price needs US stocks: drop the choice
+  // when the underlyings no longer allow it. The disruption rule and the close go with the window.
   const windowOk = p.underlyings.every(canWindowFeed);
+  const closeOk = p.underlyings.every(canCloseFeed);
   useEffect(() => {
-    if (!windowOk && p.fixingWindowMin) setP((prev) => ({ ...prev, fixingWindowMin: undefined }));
-  }, [windowOk, p.fixingWindowMin]);
+    if (!windowOk && (p.fixingWindowMin || p.disruptionPct || p.fixingAt))
+      setP((prev) => ({ ...prev, fixingWindowMin: undefined, disruptionPct: undefined, fixingAt: undefined }));
+    else if (!closeOk && p.fixingAt) setP((prev) => ({ ...prev, fixingAt: undefined }));
+  }, [windowOk, closeOk, p.fixingWindowMin, p.disruptionPct, p.fixingAt]);
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -302,7 +307,13 @@ export default function IssueWizard() {
   // Only tokens that can be pledged now: a B20 stand-in stays hidden until it is deployed.
   const colToken = (c: CollateralSymbol) => (canPledgeNow(p, c) ? (collateralTokenOf(p, c)?.token ?? null) : null);
   const sym = config.chains.find((c) => c.key === chainKey)?.stablecoin.symbol ?? 'USD';
-  const { demo, t, timingBad, strikeAt, dateOf, fmtT, dur } = issueSchedule(every, strikeIn, timing, eco);
+  const { demo, t, timingBad, scheduleBad, strikeAt, dateOf, fmtT, dur } = issueSchedule(
+    every,
+    strikeIn,
+    timing,
+    eco,
+    p,
+  );
   const schedule = {
     strikeDate: strikeAt,
     obsDates: Array.from({ length: Math.max(0, Math.min(12, p.observations || 0)) }, (_, i) => dateOf(i + 1)),
@@ -367,7 +378,7 @@ export default function IssueWizard() {
     step === 1 || step === 3
       ? errors.length === 0 && (step !== 3 || !timingBad)
       : step === 2
-        ? size > 0 && strikeIn >= 2 && every.n > 0
+        ? size > 0 && strikeIn >= 2 && every.n > 0 && !scheduleBad
         : true;
 
   return (
@@ -443,6 +454,7 @@ export default function IssueWizard() {
               dateOf={dateOf}
               fmtT={fmtT}
               demo={demo}
+              scheduleBad={scheduleBad}
             />
           )}
 

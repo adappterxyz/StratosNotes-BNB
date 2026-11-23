@@ -15,7 +15,16 @@ export interface TemplateField {
   formula?: string;
   /** Delivered by Chainlink CRE from a price feed, checked against these bounds. */
   /** `window` (seconds): the price is the time-weighted median of the feed over that long, not its latest round. */
-  oracle?: { feed: string; feedChain?: string; min: string; max: string; staleness?: number; window?: number };
+  oracle?: {
+    feed: string;
+    feedChain?: string;
+    min: string;
+    max: string;
+    staleness?: number;
+    window?: number;
+    /** With `window`: the disruption limit, basis points (keeper.ts stepFixing). */
+    disruption?: number;
+  };
 }
 
 export type AmountSource = 'literal' | 'field' | 'expr';

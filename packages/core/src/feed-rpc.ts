@@ -54,6 +54,15 @@ export const EVM_FEED_CHAINS: Record<string, { rpc: string; chainId: number }> =
   'binance_smart_chain-testnet': { rpc: 'https://bsc-testnet-rpc.publicnode.com', chainId: 97 },
 };
 
+/**
+ * EVM feed chains whose past rounds the keeper can read (a fixing window needs them): CRE reads the latest round with
+ * its EVM capability as ever, then ONE JSON-RPC batch of getRoundData over the HTTP capability brings the history
+ * (past rounds never change, so every node gets the same reply whatever block it reads at). Ethereum and Arbitrum:
+ * where the crypto, forex and gold feeds of the catalogue live. The RPC is EVM_FEED_CHAINS', or the keeper's
+ * `historyRpcs` config.
+ */
+export const HISTORY_FEED_CHAINS: readonly string[] = ['ethereum-mainnet', 'ethereum-mainnet-arbitrum-1'];
+
 /** The JSON-RPC body asking for the head block number. */
 export const blockNumberBody = (): string =>
   JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] });

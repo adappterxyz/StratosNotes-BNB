@@ -44,9 +44,11 @@ import {
   dueReports,
   feedToFixed,
   routeFeed,
+  stepFixing,
   tokenMultiplier,
   type DueReport,
   type FeedRef,
+  type PricePoint,
 } from '../../packages/core/src/keeper';
 import { isRhMultiplierRef, rhTokenOfFeed } from '../../packages/core/src/products/robinhood-tokens';
 import {
@@ -61,10 +63,10 @@ import {
   type VaultReading,
 } from '../../packages/core/src/crosschain';
 import type { WorkflowDef } from '../../packages/core/src/def-types';
-import { readingToRound } from '../../packages/core/src/feed-rpc';
+import { EVM_FEED_CHAINS, HISTORY_FEED_CHAINS, readingToRound } from '../../packages/core/src/feed-rpc';
 import { feedAbi, lensAbi } from '../../packages/sdk/src/evm/abi';
 import { hexToBytes, snapshotToState } from '../../packages/sdk/src/evm/state';
-import { httpFeedChainsSchema, httpFeedReadings, httpWindowFixings } from './http-feeds';
+import { httpFeedChainsSchema, httpFeedReadings, roundHistories, type HistoryWanted } from './http-feeds';
 
 const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
 /** An engine or lens: the zero address means "not deployed yet" and fails the config, closed. */
@@ -113,6 +115,12 @@ const configSchema = z.object({
    * the RPC does not keep the finalized block's state.
    */
   httpFeedChains: httpFeedChainsSchema.optional(),
+  /**
+   * Optional: the JSON-RPC a fixing window reads past rounds from, per EVM feed chain (HISTORY_FEED_CHAINS:
+   * Ethereum, Arbitrum), e.g. { "ethereum-mainnet": "https://..." }. Default: the chain's public RPC
+   * (EVM_FEED_CHAINS). One batched request per chain, only in a run where a windowed fixing is due.
+   */
+  historyRpcs: z.record(z.string().regex(/^https:\/\/[^\s/?#]+[^\s]*$/, 'an https:// URL')).optional(),
   /**
    * Optional: cross-chain collateral, both directions (Robinhood Chain <-> Base Sepolia). For each vault on an asset
    * chain and its receipt on the home chain, check that the vault still backs the receipts (packages/core/src/crosschain.ts);
@@ -246,8 +254,9 @@ function dueOn(runtime: Runtime<Config>, chain: ChainConfig, nowSec: number): Du
   return out;
 }
 
-/** A Chainlink feed's latest answer as engine fixed point (10 decimals), finalized block, staleness-checked. */
-function readFeed(runtime: Runtime<Config>, f: FeedRef, nowSec: number): bigint {
+type Round = { roundId: bigint; answer: bigint; updatedAt: bigint; answeredInRound: bigint };
+/** A Chainlink feed's latest round and decimals on an EVM feed chain, at the last finalized block (2 chain reads). */
+function readFeedRound(runtime: Runtime<Config>, f: FeedRef): { round: Round; decimals: number } {
   if (!canRead(2)) throw new Error('chain reads spent this run (the report waits for the next run)');
   const evm = client(f.feedChain);
   const [roundId, answer, , updatedAt, answeredInRound] = decodeFunctionResult({
@@ -260,13 +269,7 @@ function readFeed(runtime: Runtime<Config>, f: FeedRef, nowSec: number): bigint 
     functionName: 'decimals',
     data: view(runtime, evm, f.feed, encodeFunctionData({ abi: feedAbi, functionName: 'decimals' })),
   });
-  return checkRound(
-    { roundId, answer, updatedAt, answeredInRound },
-    decimals,
-    nowSec,
-    f.staleness,
-    runtime.config.finalityAllowanceSec,
-  );
+  return { round: { roundId, answer, updatedAt, answeredInRound }, decimals };
 }
 
 export const onCron = (runtime: Runtime<Config>): string => {
@@ -297,17 +300,51 @@ export const onCron = (runtime: Runtime<Config>): string => {
     runtime,
     work.flatMap((w) => w.feeds),
   );
-  // Notes with a fixing window: the time-weighted median of each such feed over its window, from its past rounds.
-  const fixings = httpWindowFixings(
-    runtime,
-    httpReadings,
-    work.flatMap((w) => w.feeds),
-    nowSec,
-  );
+  // The latest round of every feed on an EVM feed chain, read at most once per run, whatever needs it.
+  const evmRounds = new Map<string, { round: Round; decimals: number } | { error: string }>();
+  const evmRound = (f: FeedRef) => {
+    const k = `${f.feedChain}:${f.feed.toLowerCase()}`;
+    if (!evmRounds.has(k)) {
+      try {
+        evmRounds.set(k, readFeedRound(runtime, f));
+      } catch (e) {
+        evmRounds.set(k, { error: (e as Error).message });
+      }
+    }
+    const r = evmRounds.get(k)!;
+    if ('error' in r) throw new Error(r.error);
+    return r;
+  };
+  // Notes with a fixing window: the past rounds of each such feed, back from its latest round. One request per
+  // chain: at the block the latest was read at (HTTP feed chains), or at 'latest' (EVM feed chains: CRE read the
+  // latest round, the history comes over JSON-RPC; past rounds never change).
+  const wantedHistory: HistoryWanted[] = [];
+  for (const f of work.flatMap((w) => w.feeds)) {
+    if (!f.window || isRhMultiplierRef(f)) continue;
+    const feed = f.feed.toLowerCase();
+    const http = cfg.httpFeedChains?.[f.feedChain];
+    if (http) {
+      const latest = httpReadings.feeds.get(`${f.feedChain}:${feed}`);
+      const block = httpReadings.blocks.get(f.feedChain);
+      if (latest && !('error' in latest) && block)
+        wantedHistory.push({ feedChain: f.feedChain, feed, fromRound: latest.roundId, rpc: http.rpc, block });
+    } else if (HISTORY_FEED_CHAINS.includes(f.feedChain)) {
+      const rpc = cfg.historyRpcs?.[f.feedChain] ?? EVM_FEED_CHAINS[f.feedChain]?.rpc;
+      if (!rpc) continue;
+      try {
+        const fromRound = evmRound(f).round.roundId.toString();
+        wantedHistory.push({ feedChain: f.feedChain, feed, fromRound, rpc, block: 'latest' });
+      } catch {
+        // the price read fails on its own account below
+      }
+    }
+  }
+  const histories = roundHistories(runtime, wantedHistory);
   // A basket reads one feed per underlying; read each feed at most once per run, whatever needs it.
   const prices = new Map<string, bigint>();
-  const price = (f: FeedRef) => {
-    const k = `${f.feedChain}:${f.feed.toLowerCase()}:${f.staleness}:${f.window ?? 0}`;
+  /** `fix`: the step's windowed fixing of this feed (feed decimals), in place of its latest round. */
+  const price = (f: FeedRef, fix?: bigint) => {
+    const k = `${f.feedChain}:${f.feed.toLowerCase()}:${f.staleness}:${fix ?? ''}`;
     if (!prices.has(k)) {
       // A Robinhood stock token's multiplier (the reference of a delivery or of a bStock price): its uiMultiplier(),
       // never while the issuer is processing a corporate action on it.
@@ -325,29 +362,48 @@ export const onCron = (runtime: Runtime<Config>): string => {
         if (hold) throw new Error(`${f.field}: ${hold}`);
       }
       const reading = httpReadings.feeds.get(`${f.feedChain}:${f.feed.toLowerCase()}`);
-      if (reading) {
-        const { round, decimals } = readingToRound(reading);
-        // The latest round is checked as ever (answered, positive, fresh); with a window, the fixing replaces it.
-        const latest = checkRound(round, decimals, nowSec, f.staleness, cfg.finalityAllowanceSec);
-        if (f.window) {
-          const fix = fixings.get(`${f.feedChain}:${f.feed.toLowerCase()}:${f.window}`);
-          if (fix === undefined || typeof fix !== 'bigint')
-            throw new Error(`${f.field}: ${fix?.error ?? 'no fixing for its window'}`);
-          prices.set(k, feedToFixed(fix, decimals));
-        } else prices.set(k, latest);
-      } else {
-        if (f.window) throw new Error(`${f.field}: a fixing window needs an HTTP feed chain (${f.feedChain} is not)`);
-        prices.set(k, readFeed(runtime, f, nowSec));
-      }
+      const { round, decimals } = reading ? readingToRound(reading) : evmRound(f);
+      // The latest round is checked as ever (answered, positive, fresh); with a window, the fixing replaces it.
+      const latest = checkRound(round, decimals, nowSec, f.staleness, cfg.finalityAllowanceSec);
+      if (f.window && fix === undefined) throw new Error(`${f.field}: no fixing for its window`);
+      prices.set(k, fix === undefined ? latest : feedToFixed(fix, decimals));
     }
     return prices.get(k)!;
   };
+  const postponed: string[] = [];
   for (const { chain, d, feeds } of work) {
     const evm = client(chain.chainSelectorName);
     const tag = `${chain.chainSelectorName} pid ${d.process} ${d.stepId}`;
     let values: bigint[];
     try {
-      values = feeds.map(price);
+      // The step's windowed feeds are fixed over one window: ending at the step's date, postponed together when the
+      // disruption rule says so (stepFixing).
+      const windowed = feeds.filter((f) => f.window && !isRhMultiplierRef(f));
+      const fixes = new Map<FeedRef, bigint>();
+      if (windowed.length) {
+        const hs = windowed.map((f): PricePoint[] => {
+          const h = histories.get(`${f.feedChain}:${f.feed.toLowerCase()}`);
+          if (!h) throw new Error(`${f.field}: no price history for its fixing window (${f.feedChain})`);
+          if ('error' in h) throw new Error(`${f.field}: ${h.error}`);
+          return h;
+        });
+        const fx = stepFixing(hs, {
+          window: Math.max(...windowed.map((f) => f.window!)),
+          nowSec,
+          dueAt: d.at,
+          disruptionBps: windowed.find((f) => f.disruption)?.disruption,
+        });
+        if ('wait' in fx) {
+          runtime.log(`${tag} -> waits: ${fx.wait}`);
+          postponed.push(tag);
+          continue;
+        }
+        windowed.forEach((f, i) => fixes.set(f, fx.answers[i]));
+        runtime.log(
+          `${tag}: fixing over the ${Math.max(...windowed.map((f) => f.window!))}s ending at ${fx.at}${fx.anchored ? '' : ' (the reading: the history does not reach the scheduled time)'}${fx.postponed ? `, postponed ${fx.postponed} time(s)` : ''}${fx.disrupted ? ', still disrupted: taken regardless' : ''}`,
+        );
+      }
+      values = feeds.map((f) => price(f, fixes.get(f)));
     } catch (e) {
       runtime.log(`${tag} -> skipped: ${(e as Error).message}`);
       failed.push(tag);
@@ -458,6 +514,7 @@ export const onCron = (runtime: Runtime<Config>): string => {
     due,
     written,
     failed,
+    ...(postponed.length ? { postponed } : {}),
     ...(cfg.gateways?.length ? { flushed } : {}),
     ...(cfg.vaults?.length ? { vaults: readings.length, shortfalls } : {}),
   });

@@ -50,7 +50,8 @@ import {
   type BStockSymbol,
 } from './bnb-stocks';
 import { ASSET_CLASSES } from './feed-directory';
-import { HTTP_FEED_CHAINS } from '../feed-rpc';
+import { HISTORY_FEED_CHAINS, HTTP_FEED_CHAINS } from '../feed-rpc';
+import { DISRUPTION_MAX_POSTPONEMENTS } from '../keeper';
 import { isRhStockTicker, refMultiplierField, rhMultiplierFeed } from './robinhood-tokens';
 import { FEED_CATALOGUE, type CatalogueFeed, type CatalogueSymbol } from './feeds-catalogue';
 
@@ -127,6 +128,18 @@ export interface ProductParams {
    * timeWeightedMedian). Only for feeds whose history the keeper can read (canWindowFeed).
    */
   fixingWindowMin?: number;
+  /**
+   * 'close': a closing-price note. Its start and check dates are set at the US market close (16:00 New York,
+   * usCloseOnOrAfter) and each price is the median over the fixing window ending at that time. US stocks only; needs
+   * a fixing window. The dates themselves are set at issuance (Approve Terms).
+   */
+  fixingAt?: 'close';
+  /**
+   * Disruption limit, % (absent or 0: none; DISRUPTION_LIMITS). Needs a fixing window. When a price moved more than
+   * this between its low and its high inside the window, the fixing is postponed by one window, at most
+   * DISRUPTION_MAX_POSTPONEMENTS times, then taken regardless (keeper.ts stepFixing).
+   */
+  disruptionPct?: number;
   /** Days of grace after a missed payment date or margin call, 0–7 (default; set per issuance). */
   gracePeriodDays?: number;
   /**
@@ -939,8 +952,20 @@ export function validateTermSheet(p: ProductParams): string[] {
       e.push(`The fixing window must be one of ${FIXING_WINDOWS.filter(Boolean).join(', ')} minutes, or none.`);
     const no = (p.underlyings ?? []).filter((u) => !canWindowFeed(u)).map((u) => u.symbol);
     if (no.length)
+      e.push(`A fixing window needs the price history of every underlying: not available for ${joinList(no, 'and')}.`);
+  }
+  if (p.disruptionPct) {
+    if (!(DISRUPTION_LIMITS as readonly number[]).includes(p.disruptionPct))
+      e.push(`The disruption limit must be one of ${DISRUPTION_LIMITS.filter(Boolean).join(', ')}%, or none.`);
+    if (!p.fixingWindowMin) e.push('The disruption rule needs a fixing window: choose a median first.');
+  }
+  if (p.fixingAt) {
+    if (p.fixingAt !== 'close') e.push('The fixing time must be the market close, or left out.');
+    if (!p.fixingWindowMin) e.push('A closing-price note needs a fixing window: the minutes before the close.');
+    const no = (p.underlyings ?? []).filter((u) => !canCloseFeed(u)).map((u) => u.symbol);
+    if (no.length)
       e.push(
-        `A fixing window needs the price history of every underlying: not available yet for ${joinList(no, 'and')} (stocks only for now).`,
+        `A closing price is for US stocks only: ${joinList(no, 'and')} trade${no.length === 1 ? 's' : ''} without a close.`,
       );
   }
   if (isRemoteCollateral(p) && !remoteCollateralOf(p))
@@ -1233,17 +1258,62 @@ export const EXAMPLE_PRODUCTS: Record<ProductType, ProductParams> = {
 
 /** Fixing windows an issuer can choose, minutes (0: the latest round). */
 export const FIXING_WINDOWS = [0, 15, 30, 60] as const;
+/** Disruption limits an issuer can choose, % between the low and the high inside the fixing window (0: none). */
+export const DISRUPTION_LIMITS = [0, 5, 10, 20] as const;
 /**
- * Whether the keeper can read a feed's past rounds, which a fixing window needs: only on the feed chains read over
- * JSON-RPC (HTTP_FEED_CHAINS: Robinhood Chain mainnet, i.e. every stock), where one request brings a hundred rounds.
- * CRE's EVM read budget (15 a run) is too small for a history on the other chains.
+ * Whether the keeper can read a feed's past rounds, which a fixing window needs: on the feed chains read over
+ * JSON-RPC (HTTP_FEED_CHAINS: Robinhood Chain mainnet, i.e. every stock) and on Ethereum and Arbitrum
+ * (HISTORY_FEED_CHAINS: crypto, forex, gold), where one request brings the rounds.
  */
-export const canWindowFeed = (f: { feedChain: string }): boolean => f.feedChain in HTTP_FEED_CHAINS;
+export const canWindowFeed = (f: { feedChain: string }): boolean =>
+  f.feedChain in HTTP_FEED_CHAINS || HISTORY_FEED_CHAINS.includes(f.feedChain);
+/** Whether a feed has a market close to fix at: a US stock (every stock feed is on Robinhood Chain mainnet). */
+export const canCloseFeed = (f: { feedChain: string }): boolean => f.feedChain in HTTP_FEED_CHAINS;
+
+/**
+ * The US market close (16:00 New York, unix seconds) on the first weekday at or after `tSec`. Follows New York's
+ * daylight saving. Exchange holidays and half days are not skipped: the feed is the Robinhood token's 24/5 price,
+ * so on a holiday it stands at the last close, and on a half day it is the token's price at 16:00.
+ */
+export function usCloseOnOrAfter(tSec: number): number {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hourCycle: 'h23',
+    weekday: 'short',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  });
+  const ny = (t: number) => {
+    const o: Record<string, string> = {};
+    for (const x of fmt.formatToParts(new Date(t * 1000))) o[x.type] = x.value;
+    return { wd: o.weekday, secs: Number(o.hour) * 3600 + Number(o.minute) * 60 + Number(o.second) };
+  };
+  // Step to 16:00 New York of the day `t` is in (twice: a daylight-saving change in between moves it by an hour).
+  const closeOfDay = (t: number) => {
+    let c = t + (16 * 3600 - ny(t).secs);
+    c += 16 * 3600 - ny(c).secs;
+    return c;
+  };
+  let c = closeOfDay(tSec);
+  for (let i = 0; i < 8 && (c < tSec || ny(c).wd === 'Sat' || ny(c).wd === 'Sun'); i++) c = closeOfDay(c + 86_400);
+  return c;
+}
+
 /** The fixing rule of these terms in plain words, or '' for the latest price. */
-export const fixingRuleText = (p: Pick<ProductParams, 'fixingWindowMin'>): string =>
-  p.fixingWindowMin
-    ? `Each price is the time-weighted median of the Chainlink feed over the ${p.fixingWindowMin} minutes before the check, so a brief spike or dip does not set it.`
-    : '';
+export const fixingRuleText = (p: Pick<ProductParams, 'fixingWindowMin' | 'fixingAt' | 'disruptionPct'>): string => {
+  if (!p.fixingWindowMin) return '';
+  const base =
+    p.fixingAt === 'close'
+      ? `Each price is taken at the US market close (16:00 New York): the time-weighted median of the Chainlink feed over the ${p.fixingWindowMin} minutes before it, so a brief spike or dip does not set it.`
+      : `Each price is the time-weighted median of the Chainlink feed over the ${p.fixingWindowMin} minutes before the check, so a brief spike or dip does not set it.`;
+  return p.disruptionPct
+    ? `${base} If a price moved more than ${p.disruptionPct}% between its low and its high in those minutes, the check is postponed by ${p.fixingWindowMin} minutes, at most ${DISRUPTION_MAX_POSTPONEMENTS === 2 ? 'twice' : `${DISRUPTION_MAX_POSTPONEMENTS} times`}, then taken regardless.`
+    : base;
+};
 
 /**
  * What a reader of these terms should know about the stock tokens in them (docs/CORPORATE-ACTIONS.md), in plain

@@ -32,7 +32,7 @@ import {
   type RoundHistoryRequest,
   type TokenReading,
 } from '../../packages/core/src/feed-rpc';
-import { coversWindow, timeWeightedMedian, type FeedRef, type PricePoint } from '../../packages/core/src/keeper';
+import type { FeedRef, PricePoint } from '../../packages/core/src/keeper';
 import { isRhMultiplierRef, rhTokenOfFeed } from '../../packages/core/src/products/robinhood-tokens';
 
 export const httpFeedChainsSchema = z.record(
@@ -196,42 +196,37 @@ export const roundHistory = (
   }
 };
 
+/** A feed whose past rounds a fixing window needs: read back from `fromRound` (its latest, already agreed). */
+export interface HistoryWanted {
+  feedChain: string;
+  feed: string;
+  fromRound: string;
+  rpc: string;
+  /** The block to read at: the one the latest round was read at, or 'latest' (past rounds never change). */
+  block: string;
+}
+
 /**
- * The windowed fixing of every feed `wanted` with a fixing window (FeedRef.window), by
- * `${feedChain}:${feed lowercase}:${window}`: the time-weighted median of the feed's rounds over the window before
- * `nowSec`, in feed decimals. The rounds are read going back from the latest round already agreed (`readings`), at
- * the same block, in ONE request per chain (ROUND_CALLS_PER_REQUEST shared by its feeds, spaced as roundOffsets).
- * A request that fails fails its fixings: the report waits for the next run, it never falls back to the latest
- * round. No request at all for a run without a window.
+ * The past rounds of every feed `wanted`, by `${feedChain}:${feed lowercase}`, as price points (feed decimals), in
+ * ONE request per chain (ROUND_CALLS_PER_REQUEST shared by its feeds, spaced as roundOffsets). A request that fails
+ * fails its feeds: the report waits for the next run, it never falls back to the latest round. The fixing itself
+ * (the window, the disruption rule) is the step's: packages/core/src/keeper.ts stepFixing.
  */
-export function httpWindowFixings(
-  runtime: Runtime<{ httpFeedChains?: HttpFeedChains }>,
-  readings: HttpReadings,
-  wanted: FeedRef[],
-  nowSec: number,
-): Map<string, bigint | { error: string }> {
-  const out = new Map<string, bigint | { error: string }>();
-  const chains = runtime.config.httpFeedChains ?? {};
-  // Per chain, per feed: the windows asked for and the round to read back from.
-  const byChain = new Map<string, Map<string, { windows: Set<number>; from: string }>>();
-  for (const f of wanted) {
-    if (!f.window || !chains[f.feedChain]) continue;
-    const feed = f.feed.toLowerCase();
-    const latest = readings.feeds.get(`${f.feedChain}:${feed}`);
-    if (!latest || 'error' in latest) continue; // the price read fails on its own account
-    const feeds = byChain.get(f.feedChain) ?? new Map<string, { windows: Set<number>; from: string }>();
-    const st = feeds.get(feed) ?? { windows: new Set<number>(), from: latest.roundId };
-    st.windows.add(f.window);
-    feeds.set(feed, st);
-    byChain.set(f.feedChain, feeds);
+export function roundHistories(
+  runtime: Runtime<unknown>,
+  wanted: HistoryWanted[],
+): Map<string, PricePoint[] | { error: string }> {
+  const out = new Map<string, PricePoint[] | { error: string }>();
+  const byChain = new Map<string, HistoryWanted[]>();
+  for (const w of wanted) {
+    const list = byChain.get(w.feedChain) ?? [];
+    if (!list.some((x) => x.feed.toLowerCase() === w.feed.toLowerCase())) list.push(w);
+    byChain.set(w.feedChain, list);
   }
   const http = new HTTPClient();
-  for (const [name, feeds] of byChain) {
-    const block = readings.blocks.get(name);
-    if (!block) continue;
-    const list = [...feeds];
+  for (const [name, list] of byChain) {
     const count = Math.max(4, Math.floor(ROUND_CALLS_PER_REQUEST / list.length));
-    const reqs = list.map(([feed, st]) => ({ feed, fromRound: st.from, count }));
+    const reqs = list.map((w) => ({ feed: w.feed.toLowerCase(), fromRound: w.fromRound, count }));
     let got: Array<{ rounds: string[] } | { error: string }>;
     try {
       got = JSON.parse(
@@ -240,33 +235,18 @@ export function httpWindowFixings(
             runtime,
             roundHistory,
             consensusIdenticalAggregation<string>(),
-          )({ rpc: chains[name].rpc, reqs, block })
+          )({ rpc: list[0].rpc, reqs, block: list[0].block })
           .result(),
       ) as Array<{ rounds: string[] } | { error: string }>;
     } catch (e) {
       got = reqs.map(() => ({ error: `history RPC: no consensus (${(e as Error).message})` }));
     }
     runtime.log(
-      `${name}: up to ${count} past round(s) of ${list.length} feed(s) read at block ${block} (fixing window)`,
+      `${name}: up to ${count} past round(s) of ${list.length} feed(s) read at block ${list[0].block} (fixing window)`,
     );
-    list.forEach(([feed, st], i) => {
+    reqs.forEach((r, i) => {
       const h = got[i] ?? { error: 'history RPC: no reading' };
-      for (const w of st.windows) {
-        const key = `${name}:${feed}:${w}`;
-        if ('error' in h) {
-          out.set(key, h);
-          continue;
-        }
-        try {
-          const points: PricePoint[] = roundPoints(h.rounds);
-          const m = timeWeightedMedian(points, nowSec - w, nowSec);
-          out.set(key, m.answer);
-          if (!coversWindow(points, nowSec - w))
-            runtime.log(`${name}: ${feed} fixing over ${m.covered}s of its ${w}s window (${points.length} rounds)`);
-        } catch (e) {
-          out.set(key, { error: `fixing window: ${(e as Error).message}` });
-        }
-      }
+      out.set(`${name}:${r.feed}`, 'error' in h ? h : roundPoints(h.rounds));
     });
   }
   return out;

@@ -4,6 +4,7 @@ import {
   compile,
   coversWindow,
   decodeRoundHistory,
+  DISRUPTION_MAX_POSTPONEMENTS,
   dueReports,
   EXAMPLE_PRODUCTS,
   FEEDS,
@@ -16,8 +17,11 @@ import {
   roundOffsets,
   roundPoints,
   SELECTOR_GET_ROUND,
+  stepFixing,
   timeWeightedMedian,
+  usCloseOnOrAfter,
   validateProductParams,
+  windowDisrupted,
   type ProductParams,
 } from '../src';
 
@@ -203,15 +207,139 @@ describe('fixing window: a term of the note', () => {
     expect(due[0].feeds.find((f) => f.field === 'initialLevel')).toMatchObject({ window: 3600 });
   });
 
-  it('is offered where the feed history can be read: stocks, not yet crypto', () => {
+  it('is offered where the feed history can be read: stocks, and crypto on Ethereum and Arbitrum', () => {
     expect(canWindowFeed(FEEDS.TSLA)).toBe(true);
-    expect(canWindowFeed(FEEDS.ETH)).toBe(false);
+    expect(canWindowFeed(FEEDS.ETH)).toBe(true);
+    expect(canWindowFeed({ feedChain: 'ethereum-mainnet-base-1' })).toBe(false);
     expect(validateProductParams(stock)).toEqual([]);
-    expect(validateProductParams({ ...stock, underlyings: [FEEDS.ETH] }).join(' ')).toMatch(
-      /not available yet for ETH/,
-    );
+    expect(validateProductParams({ ...stock, underlyings: [FEEDS.ETH] })).toEqual([]);
+    expect(
+      validateProductParams({
+        ...stock,
+        underlyings: [{ ...FEEDS.ETH, feedChain: 'ethereum-mainnet-base-1' }],
+      }).join(' '),
+    ).toMatch(/not available for ETH/);
     expect(validateProductParams({ ...stock, fixingWindowMin: 7 }).join(' ')).toMatch(/fixing window must be one of/);
     expect(fixingRuleText(stock)).toMatch(/time-weighted median .* 60 minutes/);
     expect(fixingRuleText({})).toBe('');
+  });
+
+  it('the disruption limit and the closing price are terms too', () => {
+    const p: ProductParams = { ...stock, fixingWindowMin: 15, disruptionPct: 10, fixingAt: 'close' };
+    expect(validateProductParams(p)).toEqual([]);
+    const o = oracleFeeds(compiled(p).def!);
+    expect(o.initialLevel).toMatchObject({ window: 900, disruption: 1000 });
+    expect(fixingRuleText(p)).toMatch(/US market close \(16:00 New York\).*15 minutes before it.*more than 10%.*twice/);
+    // Each needs a window; a close needs US stocks; the limit is one of the offered ones.
+    expect(validateProductParams({ ...p, fixingWindowMin: undefined }).join(' ')).toMatch(
+      /disruption rule needs a fixing window.*closing-price note needs a fixing window/,
+    );
+    expect(validateProductParams({ ...p, underlyings: [FEEDS.ETH] }).join(' ')).toMatch(/US stocks only: ETH trades/);
+    expect(validateProductParams({ ...p, disruptionPct: 7 }).join(' ')).toMatch(/disruption limit must be one of/);
+    // The due report carries the limit and the step's date.
+    const def = compiled(p).def!;
+    const step = def.steps.findIndex((s) => s.captures.some((x) => def.fields[x.field].name === 'initialLevel'));
+    const due = dueReports(
+      { id: '1', definition: '0x00', status: 0, tokens: [step], numbers: def.fields.map(() => 1_900_000_000n) },
+      def,
+      2_000_000_000,
+    );
+    expect(due[0].at).toBe(1_900_000_000);
+    expect(due[0].feeds.find((f) => f.field === 'initialLevel')).toMatchObject({ window: 900, disruption: 1000 });
+  });
+});
+
+describe('fixing window: the step fixing (anchored at the scheduled time, disruption rule)', () => {
+  const W = 900;
+  const calm = [
+    { at: T - 5000, answer: px(100) },
+    { at: T - 400, answer: px(101) },
+  ];
+  it('ends at the scheduled time, whenever the keeper runs', () => {
+    // A move after the scheduled time is not in the fixing, even when the report lands a little later.
+    const h = [...calm, { at: T + 20, answer: px(140) }];
+    const a = stepFixing([h], { window: W, nowSec: T + 60, dueAt: T });
+    const b = stepFixing([h], { window: W, nowSec: T + 600, dueAt: T });
+    expect(a).toMatchObject({ answers: [px(100)], at: T, anchored: true, postponed: 0 });
+    expect(b).toEqual(a);
+  });
+  it('falls back to the window before the reading when the history does not reach the scheduled time', () => {
+    const h = [{ at: T + 3000, answer: px(120) }];
+    expect(stepFixing([h], { window: W, nowSec: T + 4000, dueAt: T })).toMatchObject({
+      answers: [px(120)],
+      at: T + 4000,
+      anchored: false,
+    });
+    expect(stepFixing([calm], { window: W, nowSec: T })).toMatchObject({ at: T, anchored: false });
+  });
+  it('measures disruption between the low and the high in effect inside the window', () => {
+    const h = [
+      { at: T - 5000, answer: px(100) },
+      { at: T - 300, answer: px(88) }, // a 12% dip for 20 seconds
+      { at: T - 280, answer: px(100) },
+    ];
+    expect(windowDisrupted(h, T - W, T, 1000)).toBe(true);
+    expect(windowDisrupted(h, T - W, T, 2000)).toBe(false);
+    expect(windowDisrupted(calm, T - W, T, 500)).toBe(false);
+    // The dip is over by the next window.
+    expect(windowDisrupted(h, T, T + W, 1000)).toBe(false);
+  });
+  it('postpones a disrupted fixing by one window, and waits for that window to end', () => {
+    const h = [
+      { at: T - 5000, answer: px(100) },
+      { at: T - 300, answer: px(88) },
+      { at: T - 280, answer: px(100) },
+    ];
+    const o = { window: W, dueAt: T, disruptionBps: 1000 };
+    // Without the rule the median already ignores the dip.
+    expect(stepFixing([h], { window: W, nowSec: T + 60, dueAt: T })).toMatchObject({
+      answers: [px(100)],
+      postponed: 0,
+    });
+    expect(stepFixing([h], { ...o, nowSec: T + 60 })).toMatchObject({ retryAt: T + W });
+    expect(stepFixing([h], { ...o, nowSec: T + W + 5 })).toMatchObject({
+      answers: [px(100)],
+      at: T + W,
+      postponed: 1,
+      disrupted: false,
+      anchored: true,
+    });
+  });
+  it('one disrupted underlying postpones the whole step: every price is fixed over the same window', () => {
+    const wild = [
+      { at: T - 5000, answer: px(50) },
+      { at: T - 100, answer: px(60) },
+      { at: T + 100, answer: px(61) },
+    ];
+    const r = stepFixing([calm, wild], { window: W, nowSec: T + W, dueAt: T, disruptionBps: 1000 });
+    expect(r).toMatchObject({ answers: [px(101), px(61)], at: T + W, postponed: 1 });
+  });
+  it('is taken regardless after the last postponement', () => {
+    // A market that keeps moving 12% every window.
+    const h = Array.from({ length: 40 }, (_, i) => ({ at: T - 5000 + i * 400, answer: px(i % 2 ? 112 : 100) }));
+    const o = { window: W, dueAt: T, disruptionBps: 1000 };
+    expect(stepFixing([h], { ...o, nowSec: T + DISRUPTION_MAX_POSTPONEMENTS * W - 1 })).toHaveProperty('wait');
+    expect(stepFixing([h], { ...o, nowSec: T + DISRUPTION_MAX_POSTPONEMENTS * W })).toMatchObject({
+      at: T + DISRUPTION_MAX_POSTPONEMENTS * W,
+      postponed: DISRUPTION_MAX_POSTPONEMENTS,
+      disrupted: true,
+    });
+  });
+});
+
+describe('closing price: the US close', () => {
+  const iso = (t: number) => new Date(t * 1000).toISOString();
+  const at = (s: string) => Date.parse(s) / 1000;
+  it('is 16:00 New York on the next weekday, through daylight saving', () => {
+    // Winter (UTC-5): Monday 23 Nov 2026, before and after the close.
+    expect(iso(usCloseOnOrAfter(at('2026-11-23T15:00:00Z')))).toBe('2026-11-23T21:00:00.000Z');
+    expect(iso(usCloseOnOrAfter(at('2026-11-23T21:00:00Z')))).toBe('2026-11-23T21:00:00.000Z');
+    expect(iso(usCloseOnOrAfter(at('2026-11-23T21:00:01Z')))).toBe('2026-11-24T21:00:00.000Z');
+    // A weekend goes to Monday.
+    expect(iso(usCloseOnOrAfter(at('2026-11-20T22:00:00Z')))).toBe('2026-11-23T21:00:00.000Z');
+    expect(iso(usCloseOnOrAfter(at('2026-11-22T10:00:00Z')))).toBe('2026-11-23T21:00:00.000Z');
+    // Summer (UTC-4), and across the change (8 March 2026).
+    expect(iso(usCloseOnOrAfter(at('2026-07-01T12:00:00Z')))).toBe('2026-07-01T20:00:00.000Z');
+    expect(iso(usCloseOnOrAfter(at('2026-03-06T22:00:00Z')))).toBe('2026-03-09T20:00:00.000Z');
   });
 });

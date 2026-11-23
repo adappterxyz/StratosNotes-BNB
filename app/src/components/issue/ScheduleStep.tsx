@@ -1,5 +1,12 @@
 import { Timer } from 'lucide-react';
-import { canWindowFeed, FIXING_WINDOWS, type ProductParams } from '@sn/core';
+import {
+  canCloseFeed,
+  canWindowFeed,
+  DISRUPTION_LIMITS,
+  DISRUPTION_MAX_POSTPONEMENTS,
+  FIXING_WINDOWS,
+  type ProductParams,
+} from '@sn/core';
 import type { ChainConfig } from '../../lib/api';
 import { Presets } from './controls';
 import type { Every, Timing } from './schedule';
@@ -37,6 +44,7 @@ export function ScheduleStep({
   dateOf,
   fmtT,
   demo,
+  scheduleBad,
 }: {
   p: ProductParams;
   set: (patch: Partial<ProductParams>) => void;
@@ -55,10 +63,14 @@ export function ScheduleStep({
   dateOf: (k: number) => number;
   fmtT: (s: number) => string;
   demo: boolean;
+  scheduleBad: string;
 }) {
   const runs = demo ? Math.round(((dateOf(observations) - strikeAt) / 60) * 10) / 10 : null;
-  // A fixing window needs the feed's price history, which the keeper can read for stocks only so far.
+  // A fixing window needs the feed's price history; a closing price needs a market that closes (US stocks).
   const canWindow = p.underlyings.every(canWindowFeed);
+  const canClose = canWindow && p.underlyings.every(canCloseFeed);
+  const fixing: number | 'close' = !canWindow ? 0 : p.fixingAt === 'close' ? 'close' : (p.fixingWindowMin ?? 0);
+  const windowMin = canWindow ? (p.fixingWindowMin ?? 0) : 0;
   return (
     <>
       <h2>Schedule</h2>
@@ -142,26 +154,65 @@ export function ScheduleStep({
         />
       </div>
 
-      <div className="iw-field" data-fixing-window={p.fixingWindowMin ?? 0}>
+      <div className="iw-field" data-fixing-window={windowMin} data-fixing-at={p.fixingAt ?? ''}>
         <div className="iw-field-h">
           <span className="lbl">Which price each check uses</span>
         </div>
-        <Presets
+        <Presets<number | 'close'>
           label="Price fixing"
-          options={FIXING_WINDOWS.filter((m) => m === 0 || canWindow).map((m) => ({
-            label: m ? `${m}-minute median` : 'Latest price',
-            sub: m ? 'Ignores a brief spike' : 'One reading',
-            value: m as number,
-          }))}
-          value={canWindow ? (p.fixingWindowMin ?? 0) : 0}
-          onPick={(m) => set({ fixingWindowMin: m || undefined })}
+          options={[
+            ...FIXING_WINDOWS.filter((m) => m === 0 || canWindow).map((m) => ({
+              label: m ? `${m}-minute median` : 'Latest price',
+              sub: m ? 'Ignores a brief spike' : 'One reading',
+              value: m as number | 'close',
+            })),
+            ...(canClose
+              ? [{ label: 'Closing price', sub: 'US close, 16:00 New York', value: 'close' as number | 'close' }]
+              : []),
+          ]}
+          value={fixing}
+          onPick={(m) =>
+            m === 'close'
+              ? set({ fixingAt: 'close', fixingWindowMin: p.fixingWindowMin || 15 })
+              : set({
+                  fixingAt: undefined,
+                  fixingWindowMin: m || undefined,
+                  ...(m ? {} : { disruptionPct: undefined }),
+                })
+          }
         />
         <span className="hint">
-          {canWindow
-            ? 'A median takes the price that held for most of the minutes before the check, from the Chainlink feed. A sudden spike or dip that reverses does not set the start price, a coupon or the barrier.'
-            : 'A median over the minutes before each check is available for stocks only for now.'}
+          {!canWindow
+            ? 'A median over the minutes before each check is not available for these underlyings.'
+            : p.fixingAt === 'close'
+              ? `The book closes and every check falls at the US market close of a weekday. Each price is the median of the Chainlink feed over the ${windowMin} minutes before the close. The feed is the price of the stock token, which can differ slightly from the exchange's official closing price.`
+              : 'A median takes the price that held for most of the minutes before the check, from the Chainlink feed. A sudden spike or dip that reverses does not set the start price, a coupon or the barrier.'}
         </span>
+        {scheduleBad && <div className="notice warn">{scheduleBad}</div>}
       </div>
+
+      {windowMin > 0 && (
+        <div className="iw-field" data-disruption={p.disruptionPct ?? 0}>
+          <div className="iw-field-h">
+            <span className="lbl">If the price is moving violently at a check</span>
+          </div>
+          <Presets
+            label="Disruption rule"
+            options={DISRUPTION_LIMITS.map((d) => ({
+              label: d ? `Postpone above ${d}%` : 'Fix anyway',
+              sub: d ? `Low to high in ${windowMin} min` : 'No postponement',
+              value: d as number,
+            }))}
+            value={p.disruptionPct ?? 0}
+            onPick={(d) => set({ disruptionPct: d || undefined })}
+          />
+          <span className="hint">
+            {p.disruptionPct
+              ? `If a price moved more than ${p.disruptionPct}% between its low and its high in the ${windowMin} minutes, the check is postponed by ${windowMin} minutes, up to ${DISRUPTION_MAX_POSTPONEMENTS} times (${DISRUPTION_MAX_POSTPONEMENTS * windowMin} minutes at most), then taken regardless. The payment date does not move, so the issuer has that much less time to fund it.`
+              : 'With a limit, a check that falls in the middle of a violent move waits for the market to settle, as the market disruption clause of a traditional note does.'}
+          </span>
+        </div>
+      )}
 
       <div className="iw-timeline" aria-label="Dates">
         <span className="iw-tl-dot start">
