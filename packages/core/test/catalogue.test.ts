@@ -271,7 +271,7 @@ describe('the generated catalogue', () => {
 
   it('summarises the catalogue by class, popular symbols first', () => {
     expect(catalogueSummary(3)).toMatch(
-      /^Stock tokens: TSLAB, NVDAB, AAPLB and 4 more; Stocks: TSLA, NVDA, AAPL and \d+ more; Crypto: ETH, BTC, SOL and \d+ more;/,
+      /^Stock tokens: TSLAB, NVDAB, AAPLB and 11 more; Stocks: TSLA, NVDA, AAPL and \d+ more; Crypto: ETH, BTC, SOL and \d+ more;/,
     );
     expect(catalogueSummary()).toContain('Forex: EUR');
     expect(catalogueSummary()).toContain('Commodities: XAU');

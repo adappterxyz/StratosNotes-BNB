@@ -3,6 +3,10 @@ import {
   ATLAS_BSTOCKS,
   ATLAS_MULTI_FEED,
   ATLAS_STALENESS,
+  ATLAS_SYMBOLS,
+  ATLAS_TOKENS,
+  COLLATERAL_SYMBOLS,
+  deliverableToken,
   atlasFetchData,
   atlasSignedBody,
   decodeAtlasSigned,
@@ -20,6 +24,7 @@ import {
 } from '../src';
 
 const TSLAB = keyedFeed(ATLAS_MULTI_FEED, 933);
+const collateralChoicesHas = (s: string) => (COLLATERAL_SYMBOLS as string[]).includes(s);
 const CHAINLINK = '0x4A1166a659A55625345e9515b32adECea5547C38';
 const w = (v: bigint) => v.toString(16).padStart(64, '0');
 
@@ -85,7 +90,14 @@ describe('Atlas Multi-Feed prices', () => {
     expect(cmcIdOfFeed(FEEDS.NVDAB)).toBe(40215);
     expect(cmcIdOfFeed(FEEDS.TSLA)).toBeUndefined();
     expect(new Set(Object.values(ATLAS_BSTOCKS).map((b) => b.cmcId)).size).toBe(7);
-    expect(new Set(Object.values(ATLAS_BSTOCKS).map((b) => b.atlasId)).size).toBe(7);
+    // The index ETFs and the other stocks: underlyings only, each with its own feed and CoinMarketCap id.
+    expect(cmcIdOfFeed(FEEDS.SPYB)).toBe(40790);
+    expect(cmcIdOfFeed(FEEDS.QQQB)).toBe(40593);
+    expect(ATLAS_SYMBOLS).toHaveLength(14);
+    expect(new Set(ATLAS_SYMBOLS.map((s) => ATLAS_TOKENS[s].cmcId)).size).toBe(14);
+    expect(new Set(ATLAS_SYMBOLS.map((s) => ATLAS_TOKENS[s].atlasId)).size).toBe(14);
+    expect(deliverableToken({ chain: 'bnb-testnet' }, 'SPYB')).toBeUndefined();
+    expect(collateralChoicesHas('SPYB')).toBe(false);
   });
 });
 

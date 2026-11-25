@@ -9,8 +9,7 @@ Submission for the **CoinMarketCap × Atlas challenge** at BNB Hack Bangkok (25 
 ## What it is
 
 A structured note pays a coupon while a stock holds above a line, and returns less than the face if the stock ends
-below a barrier. Banks sell them over the counter. Here anyone can issue one on BNB Chain, written on Binance's stock
-tokens (TSLAB, NVDAB, AAPLB, MSFTB, AMZNB, GOOGLB, METAB), backed by collateral locked in the note, with every price
+below a barrier. Banks sell them over the counter. Here anyone can issue one on BNB Chain, written on Binance's stock tokens (fourteen of them: Tesla, Nvidia, Apple and others, and the S&P 500 and Nasdaq-100 ETF tokens), backed by collateral locked in the note, with every price
 check and payment run by an automated keeper.
 
 A note pays or fails on a handful of prices, so the product is only as good as those prices:

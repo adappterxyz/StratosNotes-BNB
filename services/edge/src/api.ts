@@ -35,7 +35,9 @@ import {
 } from '@sn/core';
 import {
   ATLAS_API,
-  ATLAS_BSTOCKS,
+  ATLAS_SYMBOLS,
+  ATLAS_TOKENS,
+  isAtlasSymbol,
   ATLAS_KEY_HEADER,
   ATLAS_PRICE_PATH,
   ATLAS_SIGNER,
@@ -570,14 +572,14 @@ export function createEdgeApp(deps: EdgeAppDeps) {
   const marketCache = new Map<string, { at: number; series: Array<[number, number]> }>();
   app.get('/api/market/history', async (c) => {
     const symbols = [...new Set((c.req.query('symbols') ?? '').split(',').filter(Boolean))];
-    if (!symbols.length || symbols.length > BSTOCK_SYMBOLS.length || !symbols.every(isBStockSymbol))
-      return err(c, 400, `symbols: one or more of ${BSTOCK_SYMBOLS.join(', ')}.`);
+    if (!symbols.length || symbols.length > ATLAS_SYMBOLS.length || !symbols.every(isAtlasSymbol))
+      return err(c, 400, `symbols: one or more of ${ATLAS_SYMBOLS.join(', ')}.`);
     const key = deps.market?.cmcApiKey;
     if (!key) return err(c, 503, 'Price history is not configured on this server (CoinMarketCap key).');
     const nowSec = Math.floor((deps.now?.() ?? Date.now()) / 1000);
     const stale = symbols.filter((s) => !(nowSec - (marketCache.get(s)?.at ?? 0) < 6 * 3600));
     if (stale.length) {
-      const ids = stale.map((s) => ATLAS_BSTOCKS[s].cmcId);
+      const ids = stale.map((s) => ATLAS_TOKENS[s].cmcId);
       try {
         const res = await (deps.market?.fetch ?? fetch)(CMC_API + cmcDailyPath(ids, BSTOCKS_LISTED, nowSec), {
           headers: { [CMC_KEY_HEADER]: key, Accept: 'application/json' },
@@ -640,8 +642,8 @@ export function createEdgeApp(deps: EdgeAppDeps) {
     };
   app.get('/api/market/atlas', async (c) => {
     const symbols = [...new Set((c.req.query('symbols') ?? '').split(',').filter(Boolean))];
-    if (!symbols.length || symbols.length > BSTOCK_SYMBOLS.length || !symbols.every(isBStockSymbol))
-      return err(c, 400, `symbols: one or more of ${BSTOCK_SYMBOLS.join(', ')}.`);
+    if (!symbols.length || symbols.length > ATLAS_SYMBOLS.length || !symbols.every(isAtlasSymbol))
+      return err(c, 400, `symbols: one or more of ${ATLAS_SYMBOLS.join(', ')}.`);
     const key = deps.market?.atlasApiKey;
     if (!key) return err(c, 503, 'Live prices are not configured on this server (Atlas key).');
     const now = Math.floor((deps.now?.() ?? Date.now()) / 1000);
@@ -651,14 +653,14 @@ export function createEdgeApp(deps: EdgeAppDeps) {
         const res = await (deps.market?.fetch ?? fetch)(ATLAS_API + ATLAS_PRICE_PATH, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', [ATLAS_KEY_HEADER]: key },
-          body: atlasSignedBody(BSTOCK_SYMBOLS.map((s) => ATLAS_BSTOCKS[s].atlasId)),
+          body: atlasSignedBody(ATLAS_SYMBOLS.map((s) => ATLAS_TOKENS[s].atlasId)),
         });
         const report = decodeAtlasSigned(await res.text());
         const signer = await recoverAddress({ hash: keccak256(report.payload), signature: report.signature });
         if (signer.toLowerCase() !== ATLAS_SIGNER.toLowerCase()) throw new Error(`signed by ${signer}, not Atlas`);
         const prices = new Map<string, { price: number; at: number; status?: string; score?: number }>();
-        for (const s of BSTOCK_SYMBOLS) {
-          const p = report.prices.find((x) => x.feedId === ATLAS_BSTOCKS[s].atlasId);
+        for (const s of ATLAS_SYMBOLS) {
+          const p = report.prices.find((x) => x.feedId === ATLAS_TOKENS[s].atlasId);
           if (p)
             prices.set(s, {
               price: Number(p.answer / 10n ** 12n) / 1e6,

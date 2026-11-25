@@ -1,7 +1,6 @@
 # Atlas and CoinMarketCap: how stock-token notes are priced
 
-Notes on BNB Chain can be written on Binance's stock tokens (bStocks: TSLAB, NVDAB, AAPLB, MSFTB, AMZNB, GOOGLB,
-METAB). Two data providers price them, and a note needs both:
+Notes on BNB Chain can be written on fourteen of Binance's stock tokens (bStocks: TSLAB, NVDAB, the index ETFs SPYB and QQQB, and ten more). Two data providers price them, and a note needs both:
 
 | Provider      | What it gives                                                    | Where it is read                                  |
 | ------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
@@ -40,7 +39,7 @@ So the rule is: **Atlas sets the price, CoinMarketCap has to agree, and CoinMark
    Atlas's reporter key (`0x59eD4701224fD9e2a85Ef2946c2ab828C1dDC600`) signed it, together with Atlas's own
    quality status for the feed (`packages/core/src/atlas-signed.ts`, `GET /api/market/atlas`).
 
-All seven feeds live in one contract, `0xeace519ebb14fb8404fa6ddd23c3b34abade44aa` on BNB Chain mainnet, read with
+All fourteen feeds live in one contract, `0xeace519ebb14fb8404fa6ddd23c3b34abade44aa` on BNB Chain mainnet, read with
 `fetch(bytes4 feedId)`:
 
 | Token  | Atlas feed | CoinMarketCap id |
@@ -52,6 +51,17 @@ All seven feeds live in one contract, `0xeace519ebb14fb8404fa6ddd23c3b34abade44a
 | AMZNB  | 981        | 40929            |
 | GOOGLB | 952        | 40793            |
 | METAB  | 944        | 40592            |
+| SPYB   | 956        | 40790            |
+| QQQB   | 947        | 40593            |
+| COINB  | 949        | 40789            |
+| MSTRB  | 939        | 40536            |
+| AMDB   | 942        | 40538            |
+| PLTRB  | 945        | 40590            |
+| NFLXB  | 996        | 40973            |
+
+The first seven have a stand-in token on BNB Chain testnet, so a note can lock them as collateral or deliver them.
+The last seven (the S&P 500 and Nasdaq-100 ETF tokens among them) are underlyings only: a note on one settles in
+cash.
 
 ## What CoinMarketCap is used for
 

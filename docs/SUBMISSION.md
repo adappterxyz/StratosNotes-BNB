@@ -22,8 +22,8 @@ defined payoff on those stocks without trusting the issuer's price.
 
 ## Which data we use, and why
 
-**Atlas (on-chain feeds, BNB Chain mainnet).** One Multi-Feed contract, `fetch(bytes4)`, seven feeds: TSLAB, NVDAB,
-AAPLB, MSFTB, AMZNB, GOOGLB, METAB.
+**Atlas (on-chain feeds, BNB Chain mainnet).** One Multi-Feed contract, `fetch(bytes4)`, fourteen feeds: the index ETFs
+SPYB and QQQB, and TSLAB, NVDAB, AAPLB, MSFTB, AMZNB, GOOGLB, METAB, COINB, MSTRB, AMDB, PLTRB, NFLXB.
 
 - It sets every price of a stock-token note: start price, coupon checks, barrier.
 - It values stock tokens locked as collateral.
@@ -79,4 +79,5 @@ hackathon: everything involving Atlas and CoinMarketCap, stock tokens as underly
 3. **Haircuts that move:** today the liquidity-based haircut is advice at issuance. Next, the note re-reads the
    token's liquidity at every check and calls for more collateral when the market thins.
 4. **A deadline for disagreement:** what a note does when the two sources stay apart past a set time.
-5. **More tokens:** Atlas prices about 100 stock tokens and ETFs on BNB Chain; we list seven.
+5. **More tokens:** Atlas prices about 100 stock tokens and ETFs on BNB Chain; we list fourteen, seven of them
+   with a testnet stand-in that can be locked as collateral or delivered.

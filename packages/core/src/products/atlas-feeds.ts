@@ -48,9 +48,44 @@ export const ATLAS_BSTOCKS: Record<
   METAB: { atlasId: 944, cmcId: 40592, minPrice: 58, maxPrice: 5_800 },
 };
 
+/**
+ * More of Binance's stock tokens Atlas prices in the same Multi-Feed (checked on-chain 2026-11-25): the two index
+ * ETFs structured notes are most often written on, and five more stocks. Underlyings only: notes.markets has no
+ * testnet stand-in for them, so a note on one settles in cash and they are not offered as collateral.
+ */
+export type AtlasOnlySymbol = 'SPYB' | 'QQQB' | 'COINB' | 'MSTRB' | 'AMDB' | 'PLTRB' | 'NFLXB';
+export const ATLAS_ONLY: Record<
+  AtlasOnlySymbol,
+  { name: string; atlasId: number; cmcId: number; minPrice: number; maxPrice: number }
+> = {
+  SPYB: { name: 'S&P 500 ETF (SPY)', atlasId: 956, cmcId: 40790, minPrice: 71, maxPrice: 7_100 },
+  QQQB: { name: 'Nasdaq-100 ETF (QQQ)', atlasId: 947, cmcId: 40593, minPrice: 62, maxPrice: 6_200 },
+  COINB: { name: 'Coinbase', atlasId: 949, cmcId: 40789, minPrice: 10, maxPrice: 1_000 },
+  MSTRB: { name: 'Strategy', atlasId: 939, cmcId: 40536, minPrice: 7.4, maxPrice: 740 },
+  AMDB: { name: 'AMD', atlasId: 942, cmcId: 40538, minPrice: 39, maxPrice: 3_900 },
+  PLTRB: { name: 'Palantir', atlasId: 945, cmcId: 40590, minPrice: 16, maxPrice: 1_600 },
+  NFLXB: { name: 'Netflix', atlasId: 996, cmcId: 40973, minPrice: 5.8, maxPrice: 580 },
+};
+
+/** Every stock token a note can be written on. */
+export type AtlasSymbol = BStockSymbol | AtlasOnlySymbol;
+/** Each one's Atlas feed number, CoinMarketCap id and name. */
+export const ATLAS_TOKENS: Record<
+  AtlasSymbol,
+  { name: string; atlasId: number; cmcId: number; minPrice: number; maxPrice: number }
+> = {
+  ...(Object.fromEntries(BSTOCK_SYMBOLS.map((s) => [s, { name: BSTOCKS[s].name, ...ATLAS_BSTOCKS[s] }])) as Record<
+    BStockSymbol,
+    { name: string; atlasId: number; cmcId: number; minPrice: number; maxPrice: number }
+  >),
+  ...ATLAS_ONLY,
+};
+export const ATLAS_SYMBOLS = Object.keys(ATLAS_TOKENS) as AtlasSymbol[];
+export const isAtlasSymbol = (s: string): s is AtlasSymbol => s in ATLAS_TOKENS;
+
 /** One Atlas-priced underlying, in the shape of a catalogue feed (feeds-catalogue.ts). */
 export interface AtlasFeed {
-  symbol: BStockSymbol;
+  symbol: AtlasSymbol;
   name: string;
   assetClass: 'Stock tokens';
   /** Keyed feed reference: the Multi-Feed contract and Atlas's feed id. */
@@ -65,18 +100,18 @@ export interface AtlasFeed {
   marketHours: '24/7';
 }
 
-/** Binance's bStocks as underlyings, each on its Atlas feed. */
-export const ATLAS_CATALOGUE: readonly AtlasFeed[] = BSTOCK_SYMBOLS.map((s) => ({
+/** Binance's stock tokens as underlyings, each on its Atlas feed. */
+export const ATLAS_CATALOGUE: readonly AtlasFeed[] = ATLAS_SYMBOLS.map((s) => ({
   symbol: s,
-  name: `${BSTOCKS[s].name} (bStock)`,
+  name: `${ATLAS_TOKENS[s].name} (bStock)`,
   assetClass: 'Stock tokens',
-  feed: keyedFeed(ATLAS_MULTI_FEED, ATLAS_BSTOCKS[s].atlasId),
+  feed: keyedFeed(ATLAS_MULTI_FEED, ATLAS_TOKENS[s].atlasId),
   feedChain: BSC_MAINNET_FEED_CHAIN,
   decimals: ATLAS_DECIMALS,
   heartbeat: ATLAS_HEARTBEAT,
   staleness: ATLAS_STALENESS,
-  minPrice: ATLAS_BSTOCKS[s].minPrice,
-  maxPrice: ATLAS_BSTOCKS[s].maxPrice,
+  minPrice: ATLAS_TOKENS[s].minPrice,
+  maxPrice: ATLAS_TOKENS[s].maxPrice,
   risk: 'atlas',
   marketHours: '24/7',
 }));
@@ -85,6 +120,6 @@ export const ATLAS_CATALOGUE: readonly AtlasFeed[] = BSTOCK_SYMBOLS.map((s) => (
 export function cmcIdOfFeed(f: { feed: string; feedChain: string }): number | undefined {
   if (f.feedChain !== BSC_MAINNET_FEED_CHAIN) return undefined;
   const ref = f.feed.toLowerCase();
-  const s = BSTOCK_SYMBOLS.find((x) => keyedFeed(ATLAS_MULTI_FEED, ATLAS_BSTOCKS[x].atlasId) === ref);
-  return s ? ATLAS_BSTOCKS[s].cmcId : undefined;
+  const s = ATLAS_SYMBOLS.find((x) => keyedFeed(ATLAS_MULTI_FEED, ATLAS_TOKENS[x].atlasId) === ref);
+  return s ? ATLAS_TOKENS[s].cmcId : undefined;
 }

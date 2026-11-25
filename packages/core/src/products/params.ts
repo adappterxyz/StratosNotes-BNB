@@ -59,14 +59,14 @@ import {
   type CatalogueFeed as ChainlinkFeed,
   type CatalogueSymbol as ChainlinkSymbol,
 } from './feeds-catalogue';
-import { ATLAS_CATALOGUE } from './atlas-feeds';
+import { ATLAS_CATALOGUE, type AtlasSymbol } from './atlas-feeds';
 
 export type { AssetClass, CatalogueChain } from './feed-directory';
 export { ASSET_CLASSES } from './feed-directory';
 export * from './atlas-feeds';
 
 /** Every symbol a note can be fixed on: Chainlink's catalogue and the Atlas-priced stock tokens. */
-export type CatalogueSymbol = ChainlinkSymbol | BStockSymbol;
+export type CatalogueSymbol = ChainlinkSymbol | AtlasSymbol;
 /** One price a note can be fixed on: a Chainlink feed of the generated catalogue, or an Atlas feed (atlas-feeds.ts). */
 export type CatalogueFeed = Omit<ChainlinkFeed, 'symbol' | 'feedChain' | 'feed'> & {
   symbol: CatalogueSymbol;
