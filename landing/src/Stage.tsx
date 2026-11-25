@@ -188,16 +188,11 @@ export default function Stage({ side, onSide, onTry }: { side: Side; onSide: (s:
             <div className="built-on">
               <span className="built-label">Built on</span>
               <span className="built-mark">
-                <img src="/logos/robinhood-chain-dark.svg" alt="" height={24} />
-                Robinhood Chain
-              </span>
-              <span className="built-mark">
-                <img src="/logos/base.svg" alt="" height={18} />
-                Base
-              </span>
-              <span className="built-mark">
                 <img src="/logos/bnb-chain.svg" alt="BNB Chain" height={18} />
               </span>
+              {/* Atlas and CoinMarketCap: named in text (no logo files of theirs are bundled). */}
+              <span className="built-mark">Atlas</span>
+              <span className="built-mark">CoinMarketCap</span>
               <span className="built-mark">
                 <img src="/logos/chainlink.svg" alt="Chainlink" height={20} />
               </span>
