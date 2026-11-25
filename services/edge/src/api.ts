@@ -33,6 +33,15 @@ import {
   templateOffered,
   type TemplateEntry,
 } from '@sn/core';
+import {
+  ATLAS_BSTOCKS,
+  BSTOCK_SYMBOLS,
+  CMC_API,
+  CMC_KEY_HEADER,
+  cmcDailyPath,
+  decodeCmcDaily,
+  isBStockSymbol,
+} from '@sn/core';
 import { CHAINS, mockErc20Abi, noteView, parseNoteId, positionOf, type NoteState } from '@sn/sdk';
 import type { ApiConfig } from './config';
 import type { Store } from './d1';
@@ -60,8 +69,13 @@ export interface EdgeAppDeps {
     devMailbox?: MockSender;
     nonceOf?: AlertsDeps['nonceOf'];
   };
+  /** CoinMarketCap Pro API (/api/market/history: the back-test's daily prices). The key never leaves the Worker. */
+  market?: { cmcApiKey?: string; fetch?: typeof fetch };
   now?: () => number;
 }
+
+/** 2026-06-01: before Binance's stock tokens listed (June 2026). */
+const BSTOCKS_LISTED = 1_780_272_000;
 
 const err = (c: Context, status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500 | 502 | 503, error: string) =>
   c.json({ error }, status);
@@ -535,6 +549,42 @@ export function createEdgeApp(deps: EdgeAppDeps) {
       ? [...new Set(rows.map((r) => r.chain))].map((ch) => ({ chain: ch, notes: null }))
       : [...byChain].map(([ch, set]) => ({ chain: ch, notes: set === null ? null : [...set] }));
     return c.json({ seq: latest, changes });
+  });
+
+  /**
+   * Daily USD prices of Binance's stock tokens since they listed, from CoinMarketCap's Pro API: what the issue
+   * wizard and a note's page replay the note's terms on (packages/core backtestNote). Only the tokens notes can be
+   * written on (ATLAS_BSTOCKS); answers are kept for six hours per isolate and cacheable for one, so the key's
+   * monthly credits are not a visitor's to spend.
+   */
+  const marketCache = new Map<string, { at: number; series: Array<[number, number]> }>();
+  app.get('/api/market/history', async (c) => {
+    const symbols = [...new Set((c.req.query('symbols') ?? '').split(',').filter(Boolean))];
+    if (!symbols.length || symbols.length > BSTOCK_SYMBOLS.length || !symbols.every(isBStockSymbol))
+      return err(c, 400, `symbols: one or more of ${BSTOCK_SYMBOLS.join(', ')}.`);
+    const key = deps.market?.cmcApiKey;
+    if (!key) return err(c, 503, 'Price history is not configured on this server (CoinMarketCap key).');
+    const nowSec = Math.floor((deps.now?.() ?? Date.now()) / 1000);
+    const stale = symbols.filter((s) => !(nowSec - (marketCache.get(s)?.at ?? 0) < 6 * 3600));
+    if (stale.length) {
+      const ids = stale.map((s) => ATLAS_BSTOCKS[s].cmcId);
+      try {
+        const res = await (deps.market?.fetch ?? fetch)(CMC_API + cmcDailyPath(ids, BSTOCKS_LISTED, nowSec), {
+          headers: { [CMC_KEY_HEADER]: key, Accept: 'application/json' },
+        });
+        const got = decodeCmcDaily(await res.text(), ids);
+        stale.forEach((s, i) => marketCache.set(s, { at: nowSec, series: got[i] }));
+      } catch (e) {
+        console.error(`market history: ${(e as Error).message}`);
+        return err(c, 502, 'CoinMarketCap did not answer; try again in a minute.');
+      }
+    }
+    c.header('Cache-Control', 'public, max-age=3600');
+    return c.json({
+      source: 'CoinMarketCap',
+      interval: '1d',
+      series: Object.fromEntries(symbols.map((s) => [s, marketCache.get(s)!.series])),
+    });
   });
 
   app.get('/api/stream', (c) => err(c, 404, 'Live updates moved to /api/updates (polling); reload the app.'));

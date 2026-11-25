@@ -111,3 +111,35 @@ export function secondSourceHold(
     ? `Atlas and CoinMarketCap disagree by ${(bps / 100).toFixed(2)}% (limit ${(toleranceBps / 100).toFixed(2)}%)`
     : null;
 }
+
+/** Path and query of the DAILY history of `ids` since `fromSec` (the back-test: products/backtest.ts). */
+export function cmcDailyPath(ids: readonly number[], fromSec: number, nowSec: number): string {
+  const sorted = [...new Set(ids)].sort((a, b) => a - b);
+  const end = Math.floor(nowSec / 86_400) * 86_400;
+  return `/v3/cryptocurrency/quotes/historical?id=${sorted.join(',')}&time_start=${fromSec}&time_end=${end}&interval=1d&convert=USD&aux=`;
+}
+
+/** Decode a daily history reply: per id (in the order asked), [unix seconds, USD price] oldest first; [] if none. */
+export function decodeCmcDaily(body: string, ids: readonly number[]): Array<Array<[number, number]>> {
+  let parsed: {
+    status?: { error_code?: number | string };
+    data?: Record<string, { quotes?: Array<{ timestamp?: string; quote?: { USD?: { price?: number } } }> }>;
+  };
+  try {
+    parsed = JSON.parse(body) as typeof parsed;
+  } catch {
+    throw new Error('CoinMarketCap: reply is not JSON');
+  }
+  const code = Number(parsed?.status?.error_code ?? 0);
+  if (code !== 0 || !parsed.data) throw new Error(`CoinMarketCap: request refused${code ? ` (code ${code})` : ''}`);
+  return ids.map((id) => {
+    const out: Array<[number, number]> = [];
+    for (const q of parsed.data![String(id)]?.quotes ?? []) {
+      const at = Math.floor(Date.parse(q?.timestamp ?? '') / 1000);
+      const price = q?.quote?.USD?.price;
+      if (Number.isFinite(at) && typeof price === 'number' && price > 0 && Number.isFinite(price))
+        out.push([at, Math.round(price * 1e6) / 1e6]);
+    }
+    return out.sort((a, b) => a[0] - b[0]);
+  });
+}

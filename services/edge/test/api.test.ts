@@ -333,3 +333,63 @@ describe('cron', () => {
     ).toBe('pending');
   });
 });
+
+describe('price history for the back-test (CoinMarketCap)', () => {
+  const quote = (ts: string, price: number) => ({ timestamp: ts, quote: { USD: { price } } });
+  const mk = (calls: string[], key: string | undefined = 'test-key') =>
+    createEdgeApp({
+      store: () => new Store(d1.db),
+      config,
+      ai: false,
+      now: () => NOW * 1000,
+      market: {
+        cmcApiKey: key,
+        fetch: (async (url: string, init?: { headers?: Record<string, string> }) => {
+          calls.push(`${url} ${init?.headers?.['X-CMC_PRO_API_KEY']}`);
+          return new Response(
+            JSON.stringify({
+              status: { error_code: 0 },
+              data: {
+                40214: { quotes: [quote('2026-06-12T00:00:00.000Z', 398.9), quote('2026-06-13T00:00:00.000Z', 401)] },
+                40215: { quotes: [quote('2026-06-12T00:00:00.000Z', 205.2)] },
+              },
+            }),
+          );
+        }) as unknown as typeof fetch,
+      },
+    });
+
+  it("serves the stock tokens' daily prices, asking CoinMarketCap once", async () => {
+    const calls: string[] = [];
+    const a = mk(calls);
+    const res = await a.request('/api/market/history?symbols=TSLAB,NVDAB');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('public, max-age=3600');
+    expect(await res.json()).toEqual({
+      source: 'CoinMarketCap',
+      interval: '1d',
+      series: {
+        TSLAB: [
+          [1781222400, 398.9],
+          [1781308800, 401],
+        ],
+        NVDAB: [[1781222400, 205.2]],
+      },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/v3/cryptocurrency/quotes/historical?id=40214,40215&');
+    expect(calls[0]).toContain('interval=1d');
+    expect(calls[0].endsWith(' test-key')).toBe(true);
+    // Kept: a second visitor costs no CoinMarketCap credit.
+    expect((await a.request('/api/market/history?symbols=TSLAB')).status).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('refuses symbols notes cannot be written on, and says when no key is configured', async () => {
+    const calls: string[] = [];
+    expect((await mk(calls).request('/api/market/history?symbols=DOGE')).status).toBe(400);
+    expect((await mk(calls).request('/api/market/history')).status).toBe(400);
+    expect((await mk(calls, '').request('/api/market/history?symbols=TSLAB')).status).toBe(503);
+    expect(calls).toHaveLength(0);
+  });
+});
