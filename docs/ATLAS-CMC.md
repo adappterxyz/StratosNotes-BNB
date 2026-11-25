@@ -1,0 +1,96 @@
+# Atlas and CoinMarketCap: how stock-token notes are priced
+
+Notes on BNB Chain can be written on Binance's stock tokens (bStocks: TSLAB, NVDAB, AAPLB, MSFTB, AMZNB, GOOGLB,
+METAB). Two data providers price them, and a note needs both:
+
+| Provider      | What it gives                                                    | Where it is read                                  |
+| ------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
+| Atlas         | The token's price now, on-chain, around the clock                | Multi-Feed contract on BNB Chain mainnet          |
+| CoinMarketCap | The same token's price every five minutes, and daily since June  | Pro API (`/v3/cryptocurrency/quotes/historical`)  |
+
+Everything below was built during BNB Hack Bangkok (25 to 27 November 2026). The commit tagged `pre-hackathon` is
+the state of the product before it: the note engine, the keepers, the app, and Chainlink-priced notes.
+
+## Why two sources
+
+A structured note pays or fails on a handful of prices: the start price, each coupon check, the barrier. One wrong
+price moves real money, and nobody can reverse it afterwards. Stock tokens make this harder than stocks:
+
+- They trade when the stock exchange is closed. A weekend price comes from thin markets.
+- An oracle that follows the stock exchange stands still for those hours. Chainlink's equity feeds do.
+- Atlas follows the token itself, so it has a weekend price, but it keeps only the latest value on-chain. There is
+  no history to take a median from, and no second opinion.
+
+So the rule is: **Atlas sets the price, CoinMarketCap has to agree, and CoinMarketCap supplies the history.**
+
+## What Atlas is used for
+
+1. **Fixing a note's prices.** Start price, coupon checks and barrier of a note on a stock token are Atlas's price
+   of that token (`packages/core/src/products/atlas-feeds.ts`). The price is per token, so nothing is converted by
+   the token's share multiplier, and a note that ends in the token delivers `1 / start price` tokens.
+2. **Valuing collateral.** An issuer who locks bStocks to back a note has them valued at the same Atlas price, on
+   every check, alongside the note's own prices.
+3. **Staleness as a control.** Atlas writes a price at least every 60 seconds. The keeper refuses one older than 15
+   minutes. When Atlas's sources disagree it stops publishing; the price then ages out and the check waits.
+
+All seven feeds live in one contract, `0xeace519ebb14fb8404fa6ddd23c3b34abade44aa` on BNB Chain mainnet, read with
+`fetch(bytes4 feedId)`:
+
+| Token  | Atlas feed | CoinMarketCap id |
+| ------ | ---------- | ---------------- |
+| TSLAB  | 933        | 40214            |
+| NVDAB  | 934        | 40215            |
+| AAPLB  | 979        | 40927            |
+| MSFTB  | 943        | 40589            |
+| AMZNB  | 981        | 40929            |
+| GOOGLB | 952        | 40793            |
+| METAB  | 944        | 40592            |
+
+## What CoinMarketCap is used for
+
+1. **Second source.** No Atlas price is written to a note unless CoinMarketCap's latest five-minute price is within
+   3% of it (`secondSourceHold` in `packages/core/src/cmc.ts`). Otherwise the check waits and is retried every
+   minute. A note is never fixed on one publisher alone.
+2. **Fixing window.** An issuer can choose a 15, 30 or 60 minute median instead of the latest price. For a stock
+   token the median is taken over CoinMarketCap's five-minute prices, ending at the check's scheduled time. A spike
+   that reverses within the window does not set a coupon or a barrier.
+3. **Disruption rule.** With a limit of 5%, 10% or 20%: if the token's low and high inside the window are further
+   apart than the limit, the check is postponed by one window, at most twice.
+4. **Closing-price fixing.** A note can fix at the US market close (16:00 New York) on weekdays: the token's price
+   while the stock itself is trading, not a weekend price.
+5. **Back-test.** Before issuing, and on every note's page, the note's terms are replayed from each past day on
+   CoinMarketCap's daily prices since the tokens listed (`packages/core/src/products/backtest.ts`,
+   `GET /api/market/history`): how often it redeemed early, paid every coupon, or ended with a loss.
+
+## How the keeper reads them
+
+The keeper is a Chainlink CRE workflow (`cre/notes-keeper-evm`); a fallback keeper (`services/keeper-fallback`)
+applies the same rules.
+
+- **Atlas:** one batched JSON-RPC `eth_call` to BNB Chain mainnet, at a block 20 below the head that all nodes
+  agree on, so every node reads the same price.
+- **CoinMarketCap:** one HTTP request per run for all tokens due. Nodes ask only for five-minute points at least 90
+  seconds old, so they all receive the same closed points and reach identical consensus.
+- **The key** is a keeper secret (`CMC_API_KEY`, `cre/secrets.yaml`) and a Worker secret for the back-test. It is
+  never in a note, the app or this repository.
+
+Failure handling, all tested in `packages/core/test/cmc.test.ts` and `atlas-feeds.test.ts`:
+
+| Situation                                      | What happens                                   |
+| ---------------------------------------------- | ---------------------------------------------- |
+| Atlas price older than 15 minutes              | Check waits                                    |
+| Atlas feed id returns an empty price           | That feed fails, the check waits               |
+| CoinMarketCap refuses (rate limit, bad key)    | Check waits; the log carries the error code    |
+| CoinMarketCap's newest price older than 15 min | Check waits                                    |
+| The two disagree by more than 3%               | Check waits                                    |
+| No API key configured                          | Stock-token checks wait; other notes unaffected |
+
+## Limits to know
+
+- **Testnet notes, mainnet prices.** Binance's stock tokens and Atlas's feeds for them exist on BNB Chain mainnet
+  only. Notes run on BNB Chain testnet against stand-in tokens with the real tokens' symbols and multipliers, and
+  read the real mainnet prices.
+- **A wait has no deadline when the sources disagree.** Payment dates do not move, so a long disagreement eats into
+  the issuer's funding time. A production version needs a rule for what happens after a set time.
+- **Short history.** The tokens listed in June 2026, so the back-test covers months, not market cycles.
+- **Free CoinMarketCap plan.** 15,000 credits a month covers this: a keeper run with a check due costs 1 credit.

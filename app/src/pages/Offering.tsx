@@ -4,6 +4,7 @@
  * and "play the note". (c) Details in tabs: full terms, collateral and payments, holders, how the workflow runs and
  * the contract. Phone first: no wide tables in the first two layers.
  */
+import { Backtest } from '../components/Backtest';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { isAddress } from 'viem';
@@ -339,6 +340,7 @@ export default function OfferingPage() {
                   {fixingRuleText(o.params)}
                 </p>
               )}
+              {o.hasTerms && <Backtest p={o.params} schedule={sched} cash={sym} />}
               {o.hasTerms &&
                 stockTokenNotes(o.params).map((n) => (
                   <p key={n.key} className="xs muted" data-stock-note={n.key}>

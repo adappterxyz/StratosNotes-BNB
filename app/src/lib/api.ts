@@ -141,6 +141,11 @@ export const api = {
     call<{ id: string; bytes: `0x${string}` }>(`/api/definitions/${chain}/${id}`),
   portfolio: (address: string) =>
     call<{ positions: PortfolioItem[]; payouts?: PayoutItem[] }>(`/api/portfolio/${address}`),
+  /** Daily USD prices of stock tokens since they listed (CoinMarketCap, served and cached by the API). */
+  marketHistory: (symbols: string[]) =>
+    call<{ source: string; interval: string; series: Record<string, Array<[number, number]>> }>(
+      `/api/market/history?symbols=${symbols.map(encodeURIComponent).join(',')}`,
+    ),
   templates: () => call<TemplateSummary[]>('/api/templates'),
   template: (definition: string) => call<TemplateEntry>(`/api/templates/${definition}`),
   saveTemplate: (entry: Omit<TemplateEntry, 'createdAt'>, signature: string) =>
