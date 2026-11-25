@@ -190,7 +190,7 @@ export function ScheduleStep({
             ? 'A median over the minutes before each check is not available for these underlyings.'
             : p.fixingAt === 'close'
               ? `The book closes and every check falls at the US market close of a weekday. Each price is the median of ${history} over the ${windowMin} minutes before the close. ${atlas ? 'It is the price of the stock token while the stock itself is trading, not a thin overnight or weekend price.' : "The feed is the price of the stock token, which can differ slightly from the exchange's official closing price."}`
-              : `A median takes the price that held for most of the minutes before the check, from ${history}. A sudden spike or dip that reverses does not set the start price, a coupon or the barrier.${atlas ? " Without a median, each price is Atlas's latest on BNB Chain. Either way it is written only when Atlas and CoinMarketCap agree within 3%." : ''}`}
+              : `A median takes the price that held for most of the minutes before the check, from ${history}. A sudden spike or dip that reverses does not set the start price, a coupon or the barrier.${atlas ? " Without a median, each price is Atlas's latest on BNB Chain. Either way it is written only when Atlas and CoinMarketCap agree within 3% (2% while the US stock market is closed)." : ''}`}
         </span>
         {scheduleBad && <div className="notice warn">{scheduleBad}</div>}
       </div>

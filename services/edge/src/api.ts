@@ -41,7 +41,11 @@ import {
   ATLAS_SIGNER,
   atlasSignedBody,
   BSTOCK_SYMBOLS,
+  BSTOCKS,
+  cmcDexTokenPath,
   decodeAtlasSigned,
+  decodeCmcDexToken,
+  type TokenMarket,
   CMC_API,
   CMC_KEY_HEADER,
   cmcDailyPath,
@@ -590,6 +594,37 @@ export function createEdgeApp(deps: EdgeAppDeps) {
       source: 'CoinMarketCap',
       interval: '1d',
       series: Object.fromEntries(symbols.map((s) => [s, marketCache.get(s)!.series])),
+    });
+  });
+
+  /**
+   * Each stock token's market on BNB Chain's DEXes, from CoinMarketCap's DEX API (liquidity, 24-hour volume and
+   * range): what the issue flow sizes collateral against (packages/core liquidity.ts). Kept ten minutes.
+   */
+  const dexCache = new Map<string, { at: number; market: TokenMarket }>();
+  app.get('/api/market/liquidity', async (c) => {
+    const symbols = [...new Set((c.req.query('symbols') ?? '').split(',').filter(Boolean))];
+    if (!symbols.length || symbols.length > BSTOCK_SYMBOLS.length || !symbols.every(isBStockSymbol))
+      return err(c, 400, `symbols: one or more of ${BSTOCK_SYMBOLS.join(', ')}.`);
+    const key = deps.market?.cmcApiKey;
+    if (!key) return err(c, 503, 'Market data is not configured on this server (CoinMarketCap key).');
+    const nowSec = Math.floor((deps.now?.() ?? Date.now()) / 1000);
+    try {
+      for (const s of symbols) {
+        if (nowSec - (dexCache.get(s)?.at ?? 0) < 600) continue;
+        const res = await (deps.market?.fetch ?? fetch)(CMC_API + cmcDexTokenPath(BSTOCKS[s].mainnetToken), {
+          headers: { [CMC_KEY_HEADER]: key, Accept: 'application/json' },
+        });
+        dexCache.set(s, { at: nowSec, market: decodeCmcDexToken(await res.text()) });
+      }
+    } catch (e) {
+      console.error(`market liquidity: ${(e as Error).message}`);
+      return err(c, 502, 'CoinMarketCap did not answer; try again in a minute.');
+    }
+    c.header('Cache-Control', 'public, max-age=300');
+    return c.json({
+      source: 'CoinMarketCap DEX API (BNB Chain)',
+      markets: Object.fromEntries(symbols.map((s) => [s, dexCache.get(s)!.market])),
     });
   });
 

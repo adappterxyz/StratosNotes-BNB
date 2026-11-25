@@ -7,7 +7,7 @@
  *     (postpone a check made in the middle of a violent move) need past prices: for an Atlas feed they are
  *     CoinMarketCap's five-minute points, in the feed's own decimals, through the same stepFixing as every note.
  *  2. SECOND SOURCE. No Atlas price is written to a note unless CoinMarketCap's latest point agrees with it within
- *     SECOND_SOURCE_TOLERANCE_BPS (secondSourceHold): two independent publishers, or the check waits.
+ *     the limit in force (secondSourceTolerance: 3% while the US market is open, 2% while it is closed): two independent publishers, or the check waits.
  *
  * Every node of the DON asks for the same closed five-minute points (the newest one is at least CMC_SETTLE seconds
  * old, so it is already published) and decodes the reply into the same compact strings: identical consensus, as for
@@ -28,8 +28,45 @@ export const CMC_SETTLE = 90;
 export const CMC_MAX_LOOKBACK = 4 * 3600;
 /** The newest point must be no older than this, or CoinMarketCap is not a live second source: the check waits. */
 export const CMC_MAX_AGE = 900;
-/** How far an Atlas price may sit from CoinMarketCap's latest point, basis points of the latter. */
+/**
+ * How far an Atlas price may sit from CoinMarketCap's latest point, basis points of the latter, while the US stock
+ * market is open: the stock itself is trading, the token's markets are arbitraged against it.
+ */
 export const SECOND_SOURCE_TOLERANCE_BPS = 300;
+/**
+ * The same limit while the US stock market is CLOSED (nights, weekends): the token then trades on its own, on
+ * thinner markets, and a price is easier to push. The two sources must agree more closely before a note is fixed.
+ */
+export const SECOND_SOURCE_TOLERANCE_CLOSED_BPS = 200;
+
+/** New York's offset from UTC at `tSec`, hours: -4 from the second Sunday of March to the first of November (02:00). */
+export function newYorkOffset(tSec: number): -4 | -5 {
+  const year = new Date(tSec * 1000).getUTCFullYear();
+  // The n-th Sunday of a month, as a UTC day of the month.
+  const sunday = (month: number, n: number) => {
+    const first = new Date(Date.UTC(year, month, 1)).getUTCDay();
+    return 1 + ((7 - first) % 7) + 7 * (n - 1);
+  };
+  const start = Date.UTC(year, 2, sunday(2, 2), 7) / 1000; // 02:00 EST = 07:00 UTC
+  const end = Date.UTC(year, 10, sunday(10, 1), 6) / 1000; // 02:00 EDT = 06:00 UTC
+  return tSec >= start && tSec < end ? -4 : -5;
+}
+
+/**
+ * Whether the US stock market's regular session is open at `tSec`: Monday to Friday, 09:30 to 16:00 New York. No
+ * holiday calendar: on a holiday this says open, and the looser limit applies (the conservative error would need the
+ * calendar). Plain arithmetic, no Intl: the CRE workflow's runtime has none.
+ */
+export function usMarketOpen(tSec: number): boolean {
+  const local = new Date((tSec + newYorkOffset(tSec) * 3600) * 1000);
+  const day = local.getUTCDay();
+  const minutes = local.getUTCHours() * 60 + local.getUTCMinutes();
+  return day >= 1 && day <= 5 && minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+}
+
+/** The second-source limit in force at `tSec` (market-hours aware). */
+export const secondSourceTolerance = (tSec: number): number =>
+  usMarketOpen(tSec) ? SECOND_SOURCE_TOLERANCE_BPS : SECOND_SOURCE_TOLERANCE_CLOSED_BPS;
 
 /** The end of the newest closed five-minute point every node can already read at `nowSec`. */
 export const cmcEnd = (nowSec: number): number => Math.floor((nowSec - CMC_SETTLE) / CMC_STEP) * CMC_STEP;
@@ -99,7 +136,7 @@ export function secondSourceHold(
   answer: bigint,
   points: readonly PricePoint[],
   nowSec: number,
-  toleranceBps: number = SECOND_SOURCE_TOLERANCE_BPS,
+  toleranceBps: number = secondSourceTolerance(nowSec),
 ): string | null {
   const newest = points.reduce<PricePoint | null>((a, p) => (!a || p.at > a.at ? p : a), null);
   if (!newest) return 'CoinMarketCap has no price to compare with (second source)';
@@ -108,7 +145,7 @@ export function secondSourceHold(
   const diff = answer > newest.answer ? answer - newest.answer : newest.answer - answer;
   const bps = Number((diff * 10_000n) / newest.answer);
   return bps > toleranceBps
-    ? `Atlas and CoinMarketCap disagree by ${(bps / 100).toFixed(2)}% (limit ${(toleranceBps / 100).toFixed(2)}%)`
+    ? `Atlas and CoinMarketCap disagree by ${(bps / 100).toFixed(2)}% (limit ${(toleranceBps / 100).toFixed(2)}%${usMarketOpen(nowSec) ? '' : ', US market closed'})`
     : null;
 }
 

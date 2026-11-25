@@ -6,7 +6,10 @@ import {
   cmcHistoryPath,
   decodeCmcHistory,
   roundPoints,
+  newYorkOffset,
   secondSourceHold,
+  secondSourceTolerance,
+  usMarketOpen,
   stepFixing,
   usdToAnswer,
 } from '../src';
@@ -63,12 +66,44 @@ describe('CoinMarketCap as the second source', () => {
       { at: T, answer: usdToAnswer(364, 18) },
       { at: T - 300, answer: usdToAnswer(300, 18) },
     ];
+    // T is a Wednesday, 16:00 UTC = 11:00 New York: the market is open, the limit is 3%.
+    expect(usMarketOpen(T + 120)).toBe(true);
     expect(secondSourceHold(usdToAnswer(363.85, 18), pts, T + 120)).toBeNull();
     expect(secondSourceHold(usdToAnswer(374.9, 18), pts, T + 120)).toBeNull(); // 2.99%
     expect(secondSourceHold(usdToAnswer(376, 18), pts, T + 120)).toMatch(/disagree by 3\.29% \(limit 3\.00%\)/);
     expect(secondSourceHold(usdToAnswer(340, 18), pts, T + 120)).toMatch(/disagree by 6\.59%/);
     expect(secondSourceHold(usdToAnswer(364, 18), pts, T + CMC_MAX_AGE + 1)).toMatch(/newest price is 901s old/);
     expect(secondSourceHold(usdToAnswer(364, 18), [], T)).toMatch(/no price to compare/);
+  });
+
+  it('asks for closer agreement while the US stock market is closed', () => {
+    // 2026-11-25 is a Wednesday (EST, UTC-5): open 14:30 to 21:00 UTC.
+    const day = Date.UTC(2026, 10, 25) / 1000;
+    expect(usMarketOpen(day + 14 * 3600 + 29 * 60)).toBe(false);
+    expect(usMarketOpen(day + 14 * 3600 + 30 * 60)).toBe(true);
+    expect(usMarketOpen(day + 20 * 3600 + 59 * 60)).toBe(true);
+    expect(usMarketOpen(day + 21 * 3600)).toBe(false);
+    // Saturday 28 November: closed all day.
+    expect(usMarketOpen(day + 3 * 86_400 + 16 * 3600)).toBe(false);
+    // Summer time (UTC-4): Wednesday 15 July 2026 opens at 13:30 UTC.
+    const july = Date.UTC(2026, 6, 15) / 1000;
+    expect(newYorkOffset(july)).toBe(-4);
+    expect(usMarketOpen(july + 13 * 3600 + 30 * 60)).toBe(true);
+    expect(usMarketOpen(july + 20 * 3600)).toBe(false);
+    // The clocks change at 02:00 local: 8 March and 1 November 2026.
+    expect(newYorkOffset(Date.UTC(2026, 2, 8, 6, 59) / 1000)).toBe(-5);
+    expect(newYorkOffset(Date.UTC(2026, 2, 8, 7) / 1000)).toBe(-4);
+    expect(newYorkOffset(Date.UTC(2026, 10, 1, 5, 59) / 1000)).toBe(-4);
+    expect(newYorkOffset(Date.UTC(2026, 10, 1, 6) / 1000)).toBe(-5);
+    expect(secondSourceTolerance(day + 16 * 3600)).toBe(300);
+    expect(secondSourceTolerance(day + 3 * 3600)).toBe(200);
+    // The same 2.5% gap passes at midday and holds the check at night.
+    const night = day + 3 * 3600;
+    const at = (t: number) => [{ at: t - 120, answer: usdToAnswer(100, 18) }];
+    expect(secondSourceHold(usdToAnswer(102.5, 18), at(day + 16 * 3600), day + 16 * 3600)).toBeNull();
+    expect(secondSourceHold(usdToAnswer(102.5, 18), at(night), night)).toMatch(
+      /disagree by 2\.50% \(limit 2\.00%, US market closed\)/,
+    );
   });
 
   it("gives an Atlas-priced note its fixing window and disruption rule from CoinMarketCap's history", () => {

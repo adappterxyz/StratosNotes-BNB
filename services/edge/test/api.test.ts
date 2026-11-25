@@ -443,3 +443,47 @@ describe('live prices (Atlas signed)', () => {
     expect((await mk({ payload, signature }).request('/api/market/atlas?symbols=BTC')).status).toBe(400);
   });
 });
+
+describe('stock-token DEX markets (CoinMarketCap DEX API)', () => {
+  it("serves a token's BNB Chain liquidity, asking CoinMarketCap for its mainnet address once", async () => {
+    const calls: string[] = [];
+    const a = createEdgeApp({
+      store: () => new Store(d1.db),
+      config,
+      ai: false,
+      now: () => NOW * 1000,
+      market: {
+        cmcApiKey: 'test-key',
+        fetch: (async (url: string) => {
+          calls.push(url);
+          return new Response(
+            JSON.stringify({
+              status: { error_code: '0' },
+              data: {
+                liqUsd: '1793494.6',
+                ph24h: '386.13',
+                pl24h: '357.94',
+                pt: '1795626336000',
+                sts: [{ tp: '24h', vu: '2221107.8' }],
+              },
+            }),
+          );
+        }) as unknown as typeof fetch,
+      },
+    });
+    const res = await a.request('/api/market/liquidity?symbols=TSLAB');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      source: 'CoinMarketCap DEX API (BNB Chain)',
+      markets: {
+        TSLAB: { liquidityUsd: 1793494.6, volume24hUsd: 2221107.8, low24h: 357.94, high24h: 386.13, at: 1795626336 },
+      },
+    });
+    expect(calls).toEqual([
+      'https://pro-api.coinmarketcap.com/v1/dex/token?platform=bsc&address=0x5b1910eaad6450e50f816082aa078c41f10c292f',
+    ]);
+    await a.request('/api/market/liquidity?symbols=TSLAB');
+    expect(calls).toHaveLength(1);
+    expect((await a.request('/api/market/liquidity?symbols=ETH')).status).toBe(400);
+  });
+});

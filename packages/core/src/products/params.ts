@@ -51,7 +51,7 @@ import {
 } from './bnb-stocks';
 import { ASSET_CLASSES } from './feed-directory';
 import { BSC_MAINNET_FEED_CHAIN, FEED_REF, HISTORY_FEED_CHAINS, HTTP_FEED_CHAINS, isAtlasFeed } from '../feed-rpc';
-import { SECOND_SOURCE_TOLERANCE_BPS } from '../cmc';
+import { SECOND_SOURCE_TOLERANCE_BPS, SECOND_SOURCE_TOLERANCE_CLOSED_BPS } from '../cmc';
 import { DISRUPTION_MAX_POSTPONEMENTS } from '../keeper';
 import { isRhStockTicker, refMultiplierField, rhMultiplierFeed } from './robinhood-tokens';
 import {
@@ -1346,7 +1346,7 @@ export const fixingRuleText = (
               atlas.map((u) => u.symbol),
               'and',
             )}, a`
-      } price is written only when Atlas (on BNB Chain) and CoinMarketCap agree within ${SECOND_SOURCE_TOLERANCE_BPS / 100}%; otherwise the check waits.`
+      } price is written only when Atlas (on BNB Chain) and CoinMarketCap agree within ${SECOND_SOURCE_TOLERANCE_BPS / 100}% (${SECOND_SOURCE_TOLERANCE_CLOSED_BPS / 100}% while the US stock market is closed); otherwise the check waits.`
     : '';
   if (!p.fixingWindowMin)
     return atlas.length
