@@ -1,4 +1,94 @@
-# notes.markets on Robinhood Chain and Base
+# notes.markets on BNB Chain: structured notes on stock tokens, priced by Atlas and CoinMarketCap
+
+Submission for the **CoinMarketCap × Atlas challenge** at BNB Hack Bangkok (25 to 27 November 2026).
+
+- **Try it:** https://bnb.notes.markets (app: https://bnb.notes.markets/app)
+- **One-page write-up:** [docs/SUBMISSION.md](docs/SUBMISSION.md)
+- **How the two data providers are used:** [docs/ATLAS-CMC.md](docs/ATLAS-CMC.md)
+
+## What it is
+
+A structured note pays a coupon while a stock holds above a line, and returns less than the face if the stock ends
+below a barrier. Banks sell them over the counter. Here anyone can issue one on BNB Chain, written on Binance's stock
+tokens (TSLAB, NVDAB, AAPLB, MSFTB, AMZNB, GOOGLB, METAB), backed by collateral locked in the note, with every price
+check and payment run by an automated keeper.
+
+A note pays or fails on a handful of prices, so the product is only as good as those prices:
+
+- **Atlas** sets them: its on-chain price of each stock token on BNB Chain, available around the clock.
+- **CoinMarketCap** must confirm them: no Atlas price is written unless CoinMarketCap's price is within 3%.
+- **CoinMarketCap's history** gives each note a median over the minutes before a check, a rule that postpones a
+  check made during a violent move, and a replay of the note's terms on every past day since the tokens listed.
+
+Without either provider a stock-token note cannot fix a price.
+
+## What was built at the hackathon
+
+Everything after the git tag `pre-hackathon` (`git log pre-hackathon..main`). Before it: the note engine, the
+keepers, the app and Chainlink-priced notes on other chains.
+
+| Built at the hackathon | Where |
+|---|---|
+| Atlas Multi-Feed reads (`fetch(bytes4)`), pinned to one block for every keeper node | `packages/core/src/feed-rpc.ts`, `products/atlas-feeds.ts` |
+| Stock tokens as underlyings and as collateral, priced per token | `packages/core/src/products/params.ts` |
+| CoinMarketCap second-source check and five-minute history | `packages/core/src/cmc.ts` |
+| Both in the Chainlink CRE keeper and the fallback keeper | `cre/notes-keeper-evm`, `services/keeper-fallback` |
+| Back-test on CoinMarketCap's daily history | `packages/core/src/products/backtest.ts`, `GET /api/market/history`, `app/src/components/Backtest.tsx` |
+| Tests | `packages/core/test/atlas-feeds.test.ts`, `cmc.test.ts`, `backtest.test.ts`, `services/edge/test/api.test.ts` |
+
+## BNB Chain components
+
+| What | Address |
+|---|---|
+| Atlas Multi-Feed (prices, BNB Chain mainnet) | `0xeace519ebb14fb8404fa6ddd23c3b34abade44aa` |
+| Note engine (BNB Chain testnet, chain id 97) | `0x37184A9D436B9e8F2225cAFd5474E60A5d18FDEb` |
+| Lens (read model) | `0xF486dfaa1111Dd20B931b304Ec7d0B967463a086` |
+| Test dollar nmUSD | `0x199816ce7e0b2366b408D6F8c3158844f06E3099` |
+| Faucet (test dollar and stock-token stand-ins) | `0xC7cdfBfE828E99b9bdF14CF1aBaA49b44922c8A6` |
+
+Binance's stock tokens exist on BNB Chain mainnet only, so the testnet notes use stand-in tokens with the real
+symbols and read the real mainnet prices ([docs/BNB-CHAIN.md](docs/BNB-CHAIN.md)).
+
+A note that ran end to end on these prices: [note 3 on BNB Chain testnet](https://bnb.notes.markets/app/note/bnb-testnet:0x37184a9d436b9e8f2225cafd5474e60a5d18fdeb:3)
+(TSLAB and NVDAB, 15-minute median, 5% disruption limit; start price
+[0x7756…62bc](https://testnet.bscscan.com/tx/0x7756815575ce099b8d049c904b4e0df307b7194bd1c06d80804b6227547362bc),
+three checks, redeemed at 1.075 per unit).
+
+## Run it
+
+Needs Node 20+, and for the keeper [Bun](https://bun.sh) and the [Chainlink CRE CLI](https://docs.chain.link/cre).
+
+```bash
+npm install
+npm run typecheck && npm test          # all unit tests, no keys needed
+
+# Keys (never committed: .keys/ is ignored)
+mkdir -p .keys
+echo '{"apiKey":"<your CoinMarketCap Pro API key>"}' > .keys/cmc.json
+
+# Issue a demo note on stock tokens on BNB Chain testnet (needs funded testnet wallets in .keys/, see docs/DEPLOY.md)
+CHAIN=bnb-testnet NOTE=bstock FIXING_WINDOW=15 DISRUPTION=5 STRIKE_IN=420 OBS_EVERY=600 npx tsx scripts/seed-note.ts
+
+# Run the keeper for BNB Chain: reads Atlas and CoinMarketCap, writes the prices to the note
+npx tsx scripts/cre-config.ts bnb
+TARGET=bnb-settings bash scripts/keeper-loop.sh
+
+# The site (landing page, app and API in one Cloudflare Worker)
+npm run build:web
+cd web && echo 'CMC_API_KEY=<your key>' > .dev.vars && wrangler dev
+```
+
+API keys stay on the server: the keeper reads its key as a workflow secret (`cre/secrets.yaml`), the site as a
+Worker secret. Neither is in the app bundle or this repository.
+
+Testnet only; the contracts are not audited.
+
+---
+
+# The rest of the product
+
+The same engine also runs notes on Robinhood Chain testnet and Base Sepolia with Chainlink prices, and can back a
+note on one chain with tokens locked on another. That work predates the hackathon.
 
 Structured notes on stocks, crypto, forex and commodities that anyone can issue and sell, on two testnets: **Robinhood
 Chain testnet** (chain id 46630) and **Base Sepolia** (chain id 84532). Each note runs on one of them, its home chain:
