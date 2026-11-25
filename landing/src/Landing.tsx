@@ -15,7 +15,7 @@ import { Wordmark } from './Wordmark';
 const APP_URL = '/app/';
 const ISSUE_URL = '/app/issue';
 const STRATOS_URL = 'https://stratoslab.xyz';
-const REPO_URL = 'https://github.com/adappterxyz/StratosNotes-Robinhood';
+const REPO_URL = 'https://github.com/adappterxyz/StratosNotes-BNB';
 
 /** Where the page snaps panel by panel (keep in step with the same query in notes.css). */
 const SNAP_QUERY = '(min-width: 960px) and (min-height: 700px) and (prefers-reduced-motion: no-preference)';
@@ -376,7 +376,8 @@ export default function Landing() {
           </div>
           <small className="by">
             <img src="/logos/stratos-mark.png" alt="" width={16} height={16} />
-            notes.markets by StratosLab · Built on Robinhood Chain, Base, BNB Chain and Chainlink
+            notes.markets by StratosLab · Built on BNB Chain with Atlas, CoinMarketCap and Chainlink; also on Robinhood
+            Chain and Base
           </small>
           <small className="disclaimer">
             notes.markets is software running on a test network: notes here use test tokens with no value. Nothing on
@@ -386,8 +387,9 @@ export default function Landing() {
             predict results. Any future offering will be subject to eligibility and jurisdiction rules. Tokens used as
             cash or collateral (USDG, USDC, the stock tokens) can be paused or frozen by their issuers. The stock tokens
             on Base and BNB Chain testnets, and nmUSD, are notes.markets&apos; own test copies, not Coinbase&apos;s or
-            Binance&apos;s. The contracts are not audited. Robinhood Chain, Base, Coinbase, Binance, BNB Chain and
-            Chainlink are trademarks of their owners; notes.markets is not affiliated with or endorsed by them.
+            Binance&apos;s. The contracts are not audited. Robinhood Chain, Base, Coinbase, Binance, BNB Chain,
+            CoinMarketCap, Atlas and Chainlink are trademarks of their owners; notes.markets is not affiliated with or
+            endorsed by them.
           </small>
         </div>
       </footer>

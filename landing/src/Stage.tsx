@@ -157,8 +157,12 @@ export default function Stage({ side, onSide, onTry }: { side: Side; onSide: (s:
         <div className="stage-shade" aria-hidden="true" />
         <div ref={heroRef} className="stage-hero">
           <div className="wrap hero-inner">
-            <h1>Structured notes, onchain.</h1>
-            <p className="sub">A set coupon for a defined risk. Collateral locked, every payment run by Chainlink.</p>
+            <span className="eyebrow">BNB Hack Bangkok · CoinMarketCap × Atlas challenge</span>
+            <h1>Structured notes on stock tokens.</h1>
+            <p className="sub">
+              On BNB Chain. A set coupon for a defined risk, collateral locked. Every price from Atlas, confirmed by
+              CoinMarketCap.
+            </p>
             <SideTabs side={side} onChange={onSide} idPrefix="hero-tab" />
             <div className="hero-cta">
               {side === 'Investors' ? (

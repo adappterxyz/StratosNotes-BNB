@@ -14,7 +14,11 @@ export function WhyOnchain() {
       "The issuer's balance sheet",
       'The issuer, backed by collateral pledged to the note at the ratio shown',
     ],
-    ['Where prices come from', "The issuer's own calculation agent", 'Public Chainlink price feeds'],
+    [
+      'Where prices come from',
+      "The issuer's own calculation agent",
+      'Public price feeds: Atlas with CoinMarketCap for stock tokens, Chainlink for the rest',
+    ],
     [
       "When you're paid",
       'Days later, through a custodian',
@@ -287,7 +291,9 @@ export function Outcomes() {
             </div>
             <OutcomeChart e={e} />
           </div>
-          <p className="oc-foot">Which ending applies is decided by Chainlink-reported prices. Not by the issuer.</p>
+          <p className="oc-foot">
+            Which ending applies is decided by published prices (Atlas, CoinMarketCap, Chainlink). Not by the issuer.
+          </p>
         </div>
       </div>
     </div>
@@ -337,7 +343,7 @@ export function Faq() {
     ],
     [
       'Where do the prices come from?',
-      'Chainlink price feeds. The same feed sets the start price and decides every coupon and repayment.',
+      "For stock tokens on BNB Chain: Atlas's on-chain price of the token, written only when CoinMarketCap's price agrees within 3%. For other assets: Chainlink price feeds. The same source sets the start price and decides every coupon and repayment.",
     ],
     [
       'Can I lose money?',
