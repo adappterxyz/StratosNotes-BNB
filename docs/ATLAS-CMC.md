@@ -6,7 +6,9 @@ METAB). Two data providers price them, and a note needs both:
 | Provider      | What it gives                                                    | Where it is read                                  |
 | ------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
 | Atlas         | The token's price now, on-chain, around the clock                | Multi-Feed contract on BNB Chain mainnet          |
+| Atlas         | The same price signed by Atlas, with its own quality reading     | Atlas API (`/report/v1/price/latest`)             |
 | CoinMarketCap | The same token's price every five minutes, and daily since June  | Pro API (`/v3/cryptocurrency/quotes/historical`)  |
+| CoinMarketCap | The token's DEX liquidity, volume and range on BNB Chain         | Pro API, DEX (`/v1/dex/token`, platform `bsc`)    |
 
 Everything below was built during BNB Hack Bangkok (25 to 27 November 2026). The commit tagged `pre-hackathon` is
 the state of the product before it: the note engine, the keepers, the app, and Chainlink-priced notes.
@@ -33,6 +35,11 @@ So the rule is: **Atlas sets the price, CoinMarketCap has to agree, and CoinMark
 3. **Staleness as a control.** Atlas writes a price at least every 60 seconds. The keeper refuses one older than 15
    minutes. When Atlas's sources disagree it stops publishing; the price then ages out and the check waits.
 
+4. **Live price between checks.** A note's page shows where each token stands against its start price right now.
+   The number is Atlas's signed price: the server recovers the signer of every reply and serves it only when
+   Atlas's reporter key (`0x59eD4701224fD9e2a85Ef2946c2ab828C1dDC600`) signed it, together with Atlas's own
+   quality status for the feed (`packages/core/src/atlas-signed.ts`, `GET /api/market/atlas`).
+
 All seven feeds live in one contract, `0xeace519ebb14fb8404fa6ddd23c3b34abade44aa` on BNB Chain mainnet, read with
 `fetch(bytes4 feedId)`:
 
@@ -48,8 +55,10 @@ All seven feeds live in one contract, `0xeace519ebb14fb8404fa6ddd23c3b34abade44a
 
 ## What CoinMarketCap is used for
 
-1. **Second source.** No Atlas price is written to a note unless CoinMarketCap's latest five-minute price is within
-   3% of it (`secondSourceHold` in `packages/core/src/cmc.ts`). Otherwise the check waits and is retried every
+1. **Second source, aware of market hours.** No Atlas price is written to a note unless CoinMarketCap's latest
+   five-minute price agrees with it (`secondSourceHold` in `packages/core/src/cmc.ts`): within 3% while the US
+   stock market is open, within 2% while it is closed. At night and at weekends the token trades on its own, on
+   thinner markets, so the two sources must agree more closely. Otherwise the check waits and is retried every
    minute. A note is never fixed on one publisher alone.
 2. **Fixing window.** An issuer can choose a 15, 30 or 60 minute median instead of the latest price. For a stock
    token the median is taken over CoinMarketCap's five-minute prices, ending at the check's scheduled time. A spike
@@ -61,6 +70,12 @@ All seven feeds live in one contract, `0xeace519ebb14fb8404fa6ddd23c3b34abade44a
 5. **Back-test.** Before issuing, and on every note's page, the note's terms are replayed from each past day on
    CoinMarketCap's daily prices since the tokens listed (`packages/core/src/products/backtest.ts`,
    `GET /api/market/history`): how often it redeemed early, paid every coupon, or ended with a loss.
+
+6. **Liquidity-aware collateral.** When an issuer pledges stock tokens, the issue flow reads each token's market
+   on BNB Chain's DEXes from CoinMarketCap's DEX API: liquidity, 24-hour volume, 24-hour high and low. It suggests
+   what share of the token's value to count (60% at most; less after a violent day; less again when the pledge is
+   more than 10% of the liquidity) and warns when a pledge is more than half of what the market holds
+   (`packages/core/src/products/liquidity.ts`, `GET /api/market/liquidity`).
 
 ## How the keeper reads them
 
@@ -82,7 +97,8 @@ Failure handling, all tested in `packages/core/test/cmc.test.ts` and `atlas-feed
 | Atlas feed id returns an empty price           | That feed fails, the check waits               |
 | CoinMarketCap refuses (rate limit, bad key)    | Check waits; the log carries the error code    |
 | CoinMarketCap's newest price older than 15 min | Check waits                                    |
-| The two disagree by more than 3%               | Check waits                                    |
+| The two disagree by more than the limit        | Check waits                                    |
+| A signed price not signed by Atlas's key       | The live price is not shown                    |
 | No API key configured                          | Stock-token checks wait; other notes unaffected |
 
 ## Limits to know
@@ -92,5 +108,9 @@ Failure handling, all tested in `packages/core/test/cmc.test.ts` and `atlas-feed
   read the real mainnet prices.
 - **A wait has no deadline when the sources disagree.** Payment dates do not move, so a long disagreement eats into
   the issuer's funding time. A production version needs a rule for what happens after a set time.
+- **No holiday calendar.** The market-hours rule knows weekdays and the 09:30 to 16:00 New York session, with
+  daylight saving, but not US holidays.
+- **The haircut is advice.** The suggested haircut is shown to the issuer; the note's terms carry whatever the
+  issuer chose, and investors see it.
 - **Short history.** The tokens listed in June 2026, so the back-test covers months, not market cycles.
 - **Free CoinMarketCap plan.** 15,000 credits a month covers this: a keeper run with a check due costs 1 credit.

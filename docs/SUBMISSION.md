@@ -27,18 +27,24 @@ AAPLB, MSFTB, AMZNB, GOOGLB, METAB.
 
 - It sets every price of a stock-token note: start price, coupon checks, barrier.
 - It values stock tokens locked as collateral.
+- Its signed price API gives a note's page the live price between checks. Our server verifies Atlas's signature on
+  every reply before showing it.
 - We chose it because it prices the token itself around the clock. An oracle that follows the stock exchange stands
   still at the weekend, and a note check that falls on a Saturday would read Friday's price.
 
 **CoinMarketCap (Pro API).**
 
 - `/v3/cryptocurrency/quotes/historical` at five-minute intervals: the second source. No Atlas price is written
-  unless CoinMarketCap's latest price is within 3% of it. Otherwise the check waits.
+  unless CoinMarketCap's latest price agrees with it: within 3% while the US stock market is open, 2% while it is
+  closed and the token trades alone on thinner markets. Otherwise the check waits.
 - The same endpoint as history: Atlas keeps only the latest price on-chain, so the median over the 15 to 60 minutes
   before a check, and the rule that postpones a check made during a move of more than 5 to 20%, are computed on
   CoinMarketCap's points.
 - The same endpoint at daily intervals: before issuing, and on every note's page, the note's terms are replayed
   from each day since the tokens listed.
+- `/v1/dex/token` on BNB Chain (network 14): each token's DEX liquidity, 24-hour volume and range. The issue flow
+  uses it to suggest a collateral haircut and to refuse-by-warning a pledge too large for the market it would be
+  sold into.
 - `/v1/cryptocurrency/map`: matches each token to its BNB Chain contract address.
 
 A stock-token note cannot fix a price without both. Details and failure handling: [ATLAS-CMC.md](ATLAS-CMC.md).
@@ -70,7 +76,7 @@ hackathon: everything involving Atlas and CoinMarketCap, stock tokens as underly
 
 1. **Mainnet with the real tokens**, after an audit of the engine.
 2. **Atlas signed prices verified in the contract**, so the note checks Atlas's signature itself.
-3. **Liquidity-aware collateral:** haircuts set from each token's BNB Chain DEX liquidity (CoinMarketCap DEX data),
-   and tighter limits while the US market is closed.
+3. **Haircuts that move:** today the liquidity-based haircut is advice at issuance. Next, the note re-reads the
+   token's liquidity at every check and calls for more collateral when the market thins.
 4. **A deadline for disagreement:** what a note does when the two sources stay apart past a set time.
 5. **More tokens:** Atlas prices about 100 stock tokens and ETFs on BNB Chain; we list seven.
