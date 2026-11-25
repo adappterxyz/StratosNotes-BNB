@@ -115,7 +115,7 @@ export function ScheduleStep({
           value={strikeIn}
           onPick={setStrikeIn}
         />
-        <span className="hint">Investors can buy until then; Chainlink fixes the starting prices at that moment.</span>
+        <span className="hint">Investors can buy until then; the starting prices are fixed at that moment.</span>
       </div>
 
       <div className="iw-field">
