@@ -4,6 +4,7 @@
  * and "play the note". (c) Details in tabs: full terms, collateral and payments, holders, how the workflow runs and
  * the contract. Phone first: no wide tables in the first two layers.
  */
+import { LivePrices } from '../components/LivePrices';
 import { Backtest } from '../components/Backtest';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -341,6 +342,17 @@ export default function OfferingPage() {
                   {fixingRuleText(o.params)}
                 </p>
               )}
+              {o.hasTerms &&
+                !o.outcome &&
+                o.params.underlyings.length > 0 &&
+                o.params.underlyings.every((u) => isAtlasFeed(u.feed)) && (
+                  <LivePrices
+                    unds={o.params.underlyings.map((u) => ({
+                      symbol: u.symbol,
+                      strike: o.unds.find((x) => x.symbol === u.symbol)?.strike ?? null,
+                    }))}
+                  />
+                )}
               {o.hasTerms && <Backtest p={o.params} schedule={sched} cash={sym} />}
               {o.hasTerms &&
                 stockTokenNotes(o.params).map((n) => (

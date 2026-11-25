@@ -4,6 +4,8 @@ import {
   ATLAS_MULTI_FEED,
   ATLAS_STALENESS,
   atlasFetchData,
+  atlasSignedBody,
+  decodeAtlasSigned,
   BSC_MAINNET_FEED_CHAIN,
   checkRound,
   cmcIdOfFeed,
@@ -84,5 +86,40 @@ describe('Atlas Multi-Feed prices', () => {
     expect(cmcIdOfFeed(FEEDS.TSLA)).toBeUndefined();
     expect(new Set(Object.values(ATLAS_BSTOCKS).map((b) => b.cmcId)).size).toBe(7);
     expect(new Set(Object.values(ATLAS_BSTOCKS).map((b) => b.atlasId)).size).toBe(7);
+  });
+});
+
+describe('Atlas signed prices', () => {
+  // A live reply of 2026-11-25 (TSLAB and NVDAB), trimmed to what is read.
+  const payload = '0x000003a50013cfee8b7c08206fde00006b071410000003a60007b5d22393eb64b12600006b07140f02';
+  const signature =
+    '0xd044803627f1fe037aa96d5181bcc94ad73af682d5d263b845a3c8b29e2ddbd434345f719bba89096c6f27261fd7dde2e7bab0ab6dde1f72aecc36642b120ae61b';
+  const body = (over: object = {}) =>
+    JSON.stringify({
+      data: {
+        payload,
+        signature,
+        magicMarker: '0x7096',
+        consensusScores: [{ feedId: '933', consensusScore: 0.926, consensusStatus: 'HEALTHY' }],
+        ...over,
+      },
+    });
+
+  it('reads the prices from the signed payload, and the quality reading beside it', () => {
+    const r = decodeAtlasSigned(body());
+    expect(r.payload).toBe(payload);
+    expect(r.signature).toBe(signature);
+    expect(r.prices).toEqual([
+      { feedId: 933, answer: 365471203775618248670n, at: 1795626000, status: 'HEALTHY', score: 0.926 },
+      { feedId: 934, answer: 142228781900157464870n, at: 1795625999 },
+    ]);
+    expect(atlasSignedBody([933, 934])).toBe('{"signed":true,"feedIds":["933","934"]}');
+  });
+
+  it('refuses a reply whose payload does not hold together', () => {
+    expect(() => decodeAtlasSigned('nope')).toThrow(/not JSON/);
+    expect(() => decodeAtlasSigned(JSON.stringify({ data: {} }))).toThrow(/no signed payload/);
+    expect(() => decodeAtlasSigned(body({ payload: payload.slice(0, -2) + '03' }))).toThrow(/does not match its count/);
+    expect(() => decodeAtlasSigned(body({ signature: '0x1234' }))).toThrow(/65 bytes/);
   });
 });

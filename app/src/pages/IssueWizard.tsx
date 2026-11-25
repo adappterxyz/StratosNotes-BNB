@@ -79,7 +79,10 @@ export default function IssueWizard() {
   // and USDG pledged into the note, a minutes-apart schedule): the presenter only clicks Continue and signs.
   const demoTsla = kind === 'reverse-convertible' && search.get('demo') === 'tsla';
   // The network picked first (on the entry page, or carried along from step to step).
-  const issuable = issueChains(config);
+  // BNB Chain first: this build is the BNB Chain one (stock tokens priced by Atlas and CoinMarketCap).
+  const issuable = [...issueChains(config)].sort(
+    (a, b) => Number(b.key === 'bnb-testnet') - Number(a.key === 'bnb-testnet'),
+  );
   const askedChain = search.get('chain');
   // Any chain this deployment serves can be picked, also one that is not a note chain by name (a local fork is
   // served as "local"): only the terms' move below needs a named note chain.

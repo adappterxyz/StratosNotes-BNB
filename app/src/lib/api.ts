@@ -146,6 +146,14 @@ export const api = {
     call<{ source: string; interval: string; series: Record<string, Array<[number, number]>> }>(
       `/api/market/history?symbols=${symbols.map(encodeURIComponent).join(',')}`,
     ),
+  /** Stock tokens' prices now: Atlas signed prices, the signature verified by the API. */
+  atlasPrices: (symbols: string[]) =>
+    call<{
+      source: string;
+      signer: string;
+      verified: boolean;
+      prices: Record<string, { price: number; at: number; status?: string; score?: number }>;
+    }>(`/api/market/atlas?symbols=${symbols.map(encodeURIComponent).join(',')}`),
   templates: () => call<TemplateSummary[]>('/api/templates'),
   template: (definition: string) => call<TemplateEntry>(`/api/templates/${definition}`),
   saveTemplate: (entry: Omit<TemplateEntry, 'createdAt'>, signature: string) =>

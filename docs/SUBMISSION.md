@@ -4,7 +4,7 @@ CoinMarketCap × Atlas challenge, BNB Hack Bangkok, 25 to 27 November 2026.
 
 - **Demo:** https://bnb.notes.markets
 - **Repository:** https://github.com/adappterxyz/StratosNotes-BNB
-- **Team:** _to be filled in: names and contacts_
+- **Team:** Notes.markets · contact: kwangwei@sol59.com
 
 ## The problem, and who it is for
 

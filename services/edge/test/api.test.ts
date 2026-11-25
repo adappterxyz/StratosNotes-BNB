@@ -393,3 +393,53 @@ describe('price history for the back-test (CoinMarketCap)', () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe('live prices (Atlas signed)', () => {
+  // A live reply of 2026-11-25, signed by Atlas's reporter key.
+  const payload = '0x000003a50013cfee8b7c08206fde00006b071410000003a60007b5d22393eb64b12600006b07140f02';
+  const signature =
+    '0xd044803627f1fe037aa96d5181bcc94ad73af682d5d263b845a3c8b29e2ddbd434345f719bba89096c6f27261fd7dde2e7bab0ab6dde1f72aecc36642b120ae61b';
+  const mk = (reply: object, calls: string[] = []) =>
+    createEdgeApp({
+      store: () => new Store(d1.db),
+      config,
+      ai: false,
+      now: () => NOW * 1000,
+      market: {
+        atlasApiKey: 'atlas-key',
+        fetch: (async (url: string, init?: { body?: string }) => {
+          calls.push(`${url} ${init?.body}`);
+          return new Response(JSON.stringify({ data: reply }));
+        }) as unknown as typeof fetch,
+      },
+    });
+
+  it('serves a price only after recovering Atlas as its signer', async () => {
+    const calls: string[] = [];
+    const a = mk(
+      { payload, signature, consensusScores: [{ feedId: '933', consensusScore: 0.9261, consensusStatus: 'HEALTHY' }] },
+      calls,
+    );
+    const res = await a.request('/api/market/atlas?symbols=TSLAB,NVDAB');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      source: 'Atlas',
+      signer: '0x59eD4701224fD9e2a85Ef2946c2ab828C1dDC600',
+      verified: true,
+      prices: {
+        TSLAB: { price: 365.471203, at: 1795626000, status: 'HEALTHY', score: 0.926 },
+        NVDAB: { price: 142.228781, at: 1795625999 },
+      },
+    });
+    expect(calls[0]).toContain('https://api.atlasoracle.io/report/v1/price/latest');
+    expect(calls[0]).toContain('"signed":true');
+  });
+
+  it('refuses a price somebody else signed, or a payload changed after signing', async () => {
+    // One digit of the TSLAB price changed: the signature now recovers to another address.
+    const forged = payload.replace('13cfee8b', '13cfee8c');
+    expect((await mk({ payload: forged, signature }).request('/api/market/atlas?symbols=TSLAB')).status).toBe(502);
+    expect((await mk({ payload }).request('/api/market/atlas?symbols=TSLAB')).status).toBe(502);
+    expect((await mk({ payload, signature }).request('/api/market/atlas?symbols=BTC')).status).toBe(400);
+  });
+});

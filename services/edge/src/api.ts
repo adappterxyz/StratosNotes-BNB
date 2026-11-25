@@ -22,7 +22,7 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
-import { createWalletClient, http, isAddress, verifyMessage, type Hex } from 'viem';
+import { createWalletClient, http, isAddress, keccak256, recoverAddress, verifyMessage, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { z } from 'zod';
 import {
@@ -34,8 +34,14 @@ import {
   type TemplateEntry,
 } from '@sn/core';
 import {
+  ATLAS_API,
   ATLAS_BSTOCKS,
+  ATLAS_KEY_HEADER,
+  ATLAS_PRICE_PATH,
+  ATLAS_SIGNER,
+  atlasSignedBody,
   BSTOCK_SYMBOLS,
+  decodeAtlasSigned,
   CMC_API,
   CMC_KEY_HEADER,
   cmcDailyPath,
@@ -70,7 +76,7 @@ export interface EdgeAppDeps {
     nonceOf?: AlertsDeps['nonceOf'];
   };
   /** CoinMarketCap Pro API (/api/market/history: the back-test's daily prices). The key never leaves the Worker. */
-  market?: { cmcApiKey?: string; fetch?: typeof fetch };
+  market?: { cmcApiKey?: string; atlasApiKey?: string; fetch?: typeof fetch };
   now?: () => number;
 }
 
@@ -584,6 +590,62 @@ export function createEdgeApp(deps: EdgeAppDeps) {
       source: 'CoinMarketCap',
       interval: '1d',
       series: Object.fromEntries(symbols.map((s) => [s, marketCache.get(s)!.series])),
+    });
+  });
+
+  /**
+   * The price NOW of Binance's stock tokens, from Atlas's signed price API (packages/core atlas-signed.ts). The
+   * Worker recovers the signer of every reply and serves it only when Atlas's reporter key signed it: a note's page
+   * shows where the price stands against the note's lines between checks. Kept 15 seconds.
+   */
+  let atlasCache: { at: number; prices: Map<string, { price: number; at: number; status?: string; score?: number }> } =
+    {
+      at: 0,
+      prices: new Map(),
+    };
+  app.get('/api/market/atlas', async (c) => {
+    const symbols = [...new Set((c.req.query('symbols') ?? '').split(',').filter(Boolean))];
+    if (!symbols.length || symbols.length > BSTOCK_SYMBOLS.length || !symbols.every(isBStockSymbol))
+      return err(c, 400, `symbols: one or more of ${BSTOCK_SYMBOLS.join(', ')}.`);
+    const key = deps.market?.atlasApiKey;
+    if (!key) return err(c, 503, 'Live prices are not configured on this server (Atlas key).');
+    const now = Math.floor((deps.now?.() ?? Date.now()) / 1000);
+    if (now - atlasCache.at >= 15 || !symbols.every((s) => atlasCache.prices.has(s))) {
+      try {
+        // All seven in one request: one cache entry serves every page.
+        const res = await (deps.market?.fetch ?? fetch)(ATLAS_API + ATLAS_PRICE_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', [ATLAS_KEY_HEADER]: key },
+          body: atlasSignedBody(BSTOCK_SYMBOLS.map((s) => ATLAS_BSTOCKS[s].atlasId)),
+        });
+        const report = decodeAtlasSigned(await res.text());
+        const signer = await recoverAddress({ hash: keccak256(report.payload), signature: report.signature });
+        if (signer.toLowerCase() !== ATLAS_SIGNER.toLowerCase()) throw new Error(`signed by ${signer}, not Atlas`);
+        const prices = new Map<string, { price: number; at: number; status?: string; score?: number }>();
+        for (const s of BSTOCK_SYMBOLS) {
+          const p = report.prices.find((x) => x.feedId === ATLAS_BSTOCKS[s].atlasId);
+          if (p)
+            prices.set(s, {
+              price: Number(p.answer / 10n ** 12n) / 1e6,
+              at: p.at,
+              ...(p.status ? { status: p.status } : {}),
+              ...(p.score !== undefined ? { score: Math.round(p.score * 1000) / 1000 } : {}),
+            });
+        }
+        atlasCache = { at: now, prices };
+      } catch (e) {
+        console.error(`atlas prices: ${(e as Error).message}`);
+        return err(c, 502, 'Atlas did not answer with a signed price; try again shortly.');
+      }
+    }
+    c.header('Cache-Control', 'public, max-age=15');
+    return c.json({
+      source: 'Atlas',
+      signer: ATLAS_SIGNER,
+      verified: true,
+      prices: Object.fromEntries(
+        symbols.flatMap((s) => (atlasCache.prices.has(s) ? [[s, atlasCache.prices.get(s)]] : [])),
+      ),
     });
   });
 
