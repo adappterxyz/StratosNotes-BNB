@@ -11,7 +11,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, Radio, ShieldCheck, WalletCards
 import {
   dec,
   defToBpmn,
-  FEED_CHAIN_LABELS,
+  feedSourceLabel,
   instantiateProduct,
   isNoteChain,
   NOTE_CHAIN_SHORT,
@@ -752,8 +752,8 @@ export default function OfferingPage() {
                       <span className="row gap-6">
                         <AssetIcon sym={u.symbol} size={18} />
                         <b>{u.symbol}/USD</b>
-                        <span className="xs dim" title={`Chainlink feed on ${u.feedChain}: ${u.feed}`}>
-                          Chainlink · {FEED_CHAIN_LABELS[u.feedChain] ?? u.feedChain}
+                        <span className="xs dim" title={`Price feed on ${u.feedChain}: ${u.feed}`}>
+                          {feedSourceLabel(u)}
                         </span>
                       </span>
                       <span className="num small">

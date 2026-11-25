@@ -63,10 +63,19 @@ import {
   type VaultReading,
 } from '../../packages/core/src/crosschain';
 import type { WorkflowDef } from '../../packages/core/src/def-types';
-import { EVM_FEED_CHAINS, HISTORY_FEED_CHAINS, readingToRound } from '../../packages/core/src/feed-rpc';
+import { CMC_STEP, secondSourceHold } from '../../packages/core/src/cmc';
+import { EVM_FEED_CHAINS, HISTORY_FEED_CHAINS, isAtlasFeed, readingToRound } from '../../packages/core/src/feed-rpc';
+import { ATLAS_DECIMALS, cmcIdOfFeed } from '../../packages/core/src/products/atlas-feeds';
 import { feedAbi, lensAbi } from '../../packages/sdk/src/evm/abi';
 import { hexToBytes, snapshotToState } from '../../packages/sdk/src/evm/state';
-import { httpFeedChainsSchema, httpFeedReadings, roundHistories, type HistoryWanted } from './http-feeds';
+import {
+  cmcHistories,
+  httpFeedChainsSchema,
+  httpFeedReadings,
+  roundHistories,
+  type CmcWanted,
+  type HistoryWanted,
+} from './http-feeds';
 
 const address = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
 /** An engine or lens: the zero address means "not deployed yet" and fails the config, closed. */
@@ -320,7 +329,8 @@ export const onCron = (runtime: Runtime<Config>): string => {
   // latest round, the history comes over JSON-RPC; past rounds never change).
   const wantedHistory: HistoryWanted[] = [];
   for (const f of work.flatMap((w) => w.feeds)) {
-    if (!f.window || isRhMultiplierRef(f)) continue;
+    // An Atlas feed keeps no past rounds: its history is CoinMarketCap's (below).
+    if (!f.window || isRhMultiplierRef(f) || isAtlasFeed(f.feed)) continue;
     const feed = f.feed.toLowerCase();
     const http = cfg.httpFeedChains?.[f.feedChain];
     if (http) {
@@ -340,6 +350,32 @@ export const onCron = (runtime: Runtime<Config>): string => {
     }
   }
   const histories = roundHistories(runtime, wantedHistory);
+  // Atlas-priced stock tokens (BNB Chain): CoinMarketCap's five-minute history of each token, in one request. It is
+  // the second source every Atlas price is checked against (secondSourceHold), and the history of a fixing window.
+  const cmcWanted: CmcWanted[] = [];
+  let cmcFrom = nowSec - 2 * CMC_STEP;
+  for (const w of work) {
+    for (const f of w.feeds) {
+      if (!isAtlasFeed(f.feed)) continue;
+      const cmcId = cmcIdOfFeed(f);
+      if (cmcId === undefined) continue; // fails on its own account below: no second source
+      const key = `${f.feedChain}:${f.feed.toLowerCase()}`;
+      const reading = httpReadings.feeds.get(key);
+      const decimals = reading && !('error' in reading) ? reading.decimals : ATLAS_DECIMALS;
+      if (!cmcWanted.some((x) => x.key === key)) cmcWanted.push({ key, cmcId, decimals });
+      if (f.window) cmcFrom = Math.min(cmcFrom, (w.d.at ?? nowSec) - f.window - CMC_STEP);
+    }
+  }
+  let cmcKey: string | undefined;
+  if (cmcWanted.length) {
+    try {
+      cmcKey = runtime.getSecret({ id: 'CMC_API_KEY' }).result().value || undefined;
+    } catch {
+      cmcKey = undefined; // every Atlas price then waits: cmcHistories says why
+    }
+  }
+  const cmc = cmcHistories(runtime, cmcKey, cmcWanted, cmcFrom, nowSec);
+  for (const [k, h] of cmc) histories.set(k, h);
   // A basket reads one feed per underlying; read each feed at most once per run, whatever needs it.
   const prices = new Map<string, bigint>();
   /** `fix`: the step's windowed fixing of this feed (feed decimals), in place of its latest round. */
@@ -365,6 +401,14 @@ export const onCron = (runtime: Runtime<Config>): string => {
       const { round, decimals } = reading ? readingToRound(reading) : evmRound(f);
       // The latest round is checked as ever (answered, positive, fresh); with a window, the fixing replaces it.
       const latest = checkRound(round, decimals, nowSec, f.staleness, cfg.finalityAllowanceSec);
+      // An Atlas price is written only when CoinMarketCap confirms it: two publishers, or the check waits.
+      if (isAtlasFeed(f.feed)) {
+        const h = cmc.get(`${f.feedChain}:${f.feed.toLowerCase()}`);
+        if (!h) throw new Error(`${f.field}: no second source for this Atlas feed`);
+        if ('error' in h) throw new Error(`${f.field}: ${h.error}`);
+        const hold = secondSourceHold(round.answer, h, nowSec);
+        if (hold) throw new Error(`${f.field}: ${hold}`);
+      }
       if (f.window && fix === undefined) throw new Error(`${f.field}: no fixing for its window`);
       prices.set(k, fix === undefined ? latest : feedToFixed(fix, decimals));
     }

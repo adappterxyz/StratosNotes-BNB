@@ -7,7 +7,7 @@ local-fork:
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.local-fork.json"
-    secrets-path: ""
+    secrets-path: "../secrets.yaml"
 
 staging-settings:
   user-workflow:
@@ -16,4 +16,4 @@ staging-settings:
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.staging.json"
-    secrets-path: ""
+    secrets-path: "../secrets.yaml"

@@ -71,6 +71,13 @@ const feedClients = Object.fromEntries(
   Object.entries(feedRpcs).map(([k, url]) => [k, createPublicClient({ transport: http(url) }) as PublicClient]),
 );
 
+// CoinMarketCap Pro API key (second source of Atlas prices): CMC_API_KEY, or a JSON file { "apiKey": "…" }.
+const cmcApiKey =
+  process.env.CMC_API_KEY ||
+  (process.env.CMC_KEY_FILE
+    ? (JSON.parse(readFileSync(process.env.CMC_KEY_FILE, 'utf8')) as { apiKey?: string }).apiKey
+    : undefined);
+
 const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
 const pass = () =>
   runOnce({
@@ -82,6 +89,7 @@ const pass = () =>
     maxReportsPerRun: fc.maxReportsPerRun ?? 5,
     gasLimit: BigInt(fc.gasLimit ?? '2500000'),
     feedRoutes: fc.feedRoutes,
+    cmcApiKey,
     log,
   });
 

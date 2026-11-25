@@ -18,6 +18,7 @@ export * from './defview';
 export * from './templates';
 export * from './keeper';
 export * from './feed-rpc';
+export * from './cmc';
 export * from './eval';
 export * from './ai/pipeline';
 export * from './ai/runner';

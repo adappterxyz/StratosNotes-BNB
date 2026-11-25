@@ -4,6 +4,7 @@
  *
  *   NOTE=crypto STRIKE_IN=900 OBS_EVERY=300 npx tsx scripts/seed-note.ts
  *   NOTE=equity npx tsx scripts/seed-note.ts
+ *   CHAIN=bnb-testnet NOTE=bstock FIXING_WINDOW=15 DISRUPTION=5 ...  (stock tokens: Atlas price, CoinMarketCap history)
  *   NOTE=equity FIXING_WINDOW=15 npx tsx scripts/seed-note.ts   (wick-resistant fixing: a 15-minute median)
  *   NOTE=crypto FIXING_WINDOW=15 DISRUPTION=10 LAG=1900 ...     (and the disruption rule: LAG must cover 2 windows)
  *
@@ -127,20 +128,29 @@ async function send(a: typeof deployer, req: Record<string, unknown>) {
 }
 
 const base: ProductParams =
-  process.env.NOTE === 'equity'
+  process.env.NOTE === 'bstock'
     ? {
+        // BNB Chain: a worst-of phoenix on Binance's stock tokens, fixed on Atlas, confirmed by CoinMarketCap.
         ...EXAMPLE_PRODUCTS.phoenix,
-        name: 'Demo Worst-of Phoenix on TSLA, NVDA',
-        underlyings: [FEEDS.TSLA, FEEDS.NVDA],
+        name: 'Demo Worst-of Phoenix on TSLAB, NVDAB',
+        underlyings: [FEEDS.TSLAB, FEEDS.NVDAB],
         observations: 3,
         settlement: 'cash',
       }
-    : {
-        ...EXAMPLE_PRODUCTS.phoenix,
-        name: 'Demo Worst-of Phoenix on ETH, BTC',
-        underlyings: [FEEDS.ETH, FEEDS.BTC],
-        observations: 3,
-      };
+    : process.env.NOTE === 'equity'
+      ? {
+          ...EXAMPLE_PRODUCTS.phoenix,
+          name: 'Demo Worst-of Phoenix on TSLA, NVDA',
+          underlyings: [FEEDS.TSLA, FEEDS.NVDA],
+          observations: 3,
+          settlement: 'cash',
+        }
+      : {
+          ...EXAMPLE_PRODUCTS.phoenix,
+          name: 'Demo Worst-of Phoenix on ETH, BTC',
+          underlyings: [FEEDS.ETH, FEEDS.BTC],
+          observations: 3,
+        };
 // FIXING_WINDOW=15|30|60: every price is the time-weighted median of the feed over that many minutes (stocks only).
 const fixingWindowMin = Number(process.env.FIXING_WINDOW ?? 0);
 if (fixingWindowMin) {

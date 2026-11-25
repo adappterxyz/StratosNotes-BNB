@@ -3,6 +3,7 @@
  * the app and the keeper use) and from the deployment records, so the page follows the product: a new chain, token or
  * cross-chain pair shows up on the next build without editing this file.
  */
+import { isAtlasFeed } from '../../packages/core/src/feed-rpc';
 import './notes.css';
 import './support.css';
 import { Wordmark } from './Wordmark';
@@ -95,9 +96,8 @@ const deliveries = (chain: NoteChain) =>
 function pricedBy(t: ChainToken): string {
   if (t.valuedAs === 'USD') return 'Counted at $1';
   if (t.b20) return `Chainlink ${t.token}/USD (per-token feed on Base)`;
-  if (t.bstock)
-    return `Chainlink ${t.bstock.delivers}/USD (Robinhood's token) ÷ its multiplier × this token's multiplier`;
   const f = t.valuedAs ? FEEDS[t.valuedAs as keyof typeof FEEDS] : undefined;
+  if (f && isAtlasFeed(f.feed)) return `Atlas ${t.valuedAs}/USD (the token's own price, BNB Chain)`;
   return f ? `Chainlink ${t.valuedAs}/USD (${FEED_CHAIN_LABELS[f.feedChain] ?? f.feedChain})` : 'No price feed';
 }
 const kindOf = (t: ChainToken) =>

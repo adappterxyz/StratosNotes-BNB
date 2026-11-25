@@ -32,6 +32,7 @@ import {
   type RoundHistoryRequest,
   type TokenReading,
 } from '../../packages/core/src/feed-rpc';
+import { CMC_API, CMC_KEY_HEADER, cmcHistoryPath, decodeCmcHistory } from '../../packages/core/src/cmc';
 import type { FeedRef, PricePoint } from '../../packages/core/src/keeper';
 import { isRhMultiplierRef, rhTokenOfFeed } from '../../packages/core/src/products/robinhood-tokens';
 
@@ -248,6 +249,83 @@ export function roundHistories(
       const h = got[i] ?? { error: 'history RPC: no reading' };
       out.set(`${name}:${r.feed}`, 'error' in h ? h : roundPoints(h.rounds));
     });
+  }
+  return out;
+}
+
+/**
+ * Runs on every node: CoinMarketCap's five-minute price history of some tokens (packages/core/src/cmc.ts), decoded
+ * to compact strings (aggregated as identical: every node asks for the same closed points). A refusal comes back as
+ * JSON with an error code, so the body is decoded whatever the HTTP status.
+ */
+export const cmcHistory = (
+  s: HTTPSendRequester,
+  req: { key: string; path: string; ids: number[]; decimals: number },
+): string => {
+  try {
+    const r = s
+      .sendRequest({
+        url: CMC_API + req.path,
+        method: 'GET',
+        headers: { [CMC_KEY_HEADER]: req.key, Accept: 'application/json' },
+        timeout: '10s',
+      })
+      .result();
+    return JSON.stringify(decodeCmcHistory(text(r), req.ids, req.decimals));
+  } catch {
+    return JSON.stringify(req.ids.map(() => ({ error: 'CoinMarketCap: request failed' })));
+  }
+};
+
+/** A stock token whose CoinMarketCap history the run needs: `key` is how the caller finds it again. */
+export interface CmcWanted {
+  key: string;
+  cmcId: number;
+  decimals: number;
+}
+
+/**
+ * CoinMarketCap's history of every token `wanted` over [fromSec, now], by `key`, as price points in the feed's
+ * decimals: ONE request per run (and per decimals, in practice one). Without an API key, or when the request fails
+ * or the nodes disagree, every token is an error: its report waits for the next run, it is never fixed on Atlas alone.
+ */
+export function cmcHistories(
+  runtime: Runtime<unknown>,
+  apiKey: string | undefined,
+  wanted: CmcWanted[],
+  fromSec: number,
+  nowSec: number,
+): Map<string, PricePoint[] | { error: string }> {
+  const out = new Map<string, PricePoint[] | { error: string }>();
+  if (!wanted.length) return out;
+  if (!apiKey) {
+    for (const w of wanted) out.set(w.key, { error: 'CoinMarketCap: no API key (keeper secret CMC_API_KEY)' });
+    return out;
+  }
+  const http = new HTTPClient();
+  for (const decimals of [...new Set(wanted.map((w) => w.decimals))]) {
+    const list = wanted.filter((w) => w.decimals === decimals);
+    const ids = [...new Set(list.map((w) => w.cmcId))].sort((a, b) => a - b);
+    const path = cmcHistoryPath(ids, fromSec, nowSec);
+    let got: Array<{ rounds: string[] } | { error: string }>;
+    try {
+      got = JSON.parse(
+        http
+          .sendRequest(
+            runtime,
+            cmcHistory,
+            consensusIdenticalAggregation<string>(),
+          )({ key: apiKey, path, ids, decimals })
+          .result(),
+      ) as Array<{ rounds: string[] } | { error: string }>;
+    } catch (e) {
+      got = ids.map(() => ({ error: `CoinMarketCap: no consensus (${(e as Error).message})` }));
+    }
+    runtime.log(`CoinMarketCap: five-minute history of ${ids.length} token(s) read (${path.split('?')[1]})`);
+    for (const w of list) {
+      const h = got[ids.indexOf(w.cmcId)] ?? { error: 'CoinMarketCap: no reading' };
+      out.set(w.key, 'error' in h ? h : roundPoints(h.rounds));
+    }
   }
   return out;
 }
