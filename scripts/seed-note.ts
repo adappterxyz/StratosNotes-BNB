@@ -266,6 +266,9 @@ const every = Number(process.env.OBS_EVERY ?? 300);
 const obsAt = Array.from({ length: product.observations }, (_, k) => strikeAt + every * (k + 1));
 const lag = Number(process.env.LAG ?? Math.floor(every / 4)),
   grace = Number(process.env.GRACE ?? Math.floor(every / 3));
+// The note's own approval rule (instantiate.ts): each period settles before the next observation. Checked here,
+// before anything is sent: a start that then fails its approval leaves an empty note behind.
+if (lag + grace > every) throw new Error(`LAG + GRACE (${lag + grace}s) must not exceed OBS_EVERY (${every}s)`);
 if (usdg) {
   const need = BigInt(pledge + subs.reduce((a, b) => a + b, 0)) * 10n ** 6n;
   const have = await client.readContract({
