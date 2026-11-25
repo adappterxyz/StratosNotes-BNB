@@ -13,6 +13,7 @@ import {
   dec,
   defToBpmn,
   feedSourceLabel,
+  isAtlasFeed,
   instantiateProduct,
   isNoteChain,
   NOTE_CHAIN_SHORT,
@@ -392,7 +393,7 @@ export default function OfferingPage() {
             </div>
             {agent && (
               <div>
-                <dt>Prices from</dt>
+                <dt>Prices delivered by</dt>
                 <dd
                   data-agent={o.reports.last ?? ''}
                   title="Who submitted this note's price reports: Chainlink CRE through its forwarder, or the fallback keeper where CRE cannot write"
@@ -933,7 +934,12 @@ function Timeline({ o, sym, now }: { o: NoteView; sym: string; now: number }) {
     <section className="card tl2" aria-labelledby="tl-h">
       <div className="spread">
         <h2 id="tl-h">Checks and payments</h2>
-        <span className="xs muted">Prices checked by Chainlink · times in your time zone</span>
+        <span className="xs muted">
+          {o.params.underlyings?.some((u) => isAtlasFeed(u.feed))
+            ? 'Prices from Atlas, confirmed by CoinMarketCap'
+            : 'Prices checked by Chainlink'}{' '}
+          · times in your time zone
+        </span>
       </div>
       <ol className="tl2-list">
         {rows.map((r) => (
