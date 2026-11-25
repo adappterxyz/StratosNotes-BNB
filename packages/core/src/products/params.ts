@@ -830,7 +830,6 @@ export const underlyingLabel = (p: ProductParams) =>
   p.underlyings.length > 1
     ? `worst of ${p.underlyings.map((u) => u.symbol).join(', ')}`
     : (p.underlyings[0]?.symbol ?? '');
-const EVM_ADDR = /^0x[0-9a-fA-F]{40}$/;
 
 /**
  * Whether a term sheet can be issued now: its terms hold together on its chain (validateTermSheet), with every token
