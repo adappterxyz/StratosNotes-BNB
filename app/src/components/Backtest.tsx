@@ -71,7 +71,7 @@ export function Backtest({
           <p className="small muted">
             Replayed from each of {r.starts} start days ({day(r.from)} to {day(r.to)}) on CoinMarketCap's daily prices
             of {symbols.join(' and ')}
-            {usable ? '' : ', one check a day (this demo schedule runs in minutes)'}.
+            {usable ? '' : ', one check a day (the history is daily; this schedule is shorter)'}.
           </p>
           <div className="kv">
             {p.autocallLevelPct !== undefined && (

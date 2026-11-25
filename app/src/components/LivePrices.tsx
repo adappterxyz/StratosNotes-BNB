@@ -27,7 +27,7 @@ export function LivePrices({ unds }: { unds: Array<{ symbol: string; strike: num
     };
   }, [key]);
   if (!live || !unds.some((u) => live[u.symbol])) return null;
-  const unhealthy = unds.map((u) => live[u.symbol]?.status).filter((s) => s && s !== 'HEALTHY');
+  const unhealthy = unds.filter((u) => live[u.symbol]?.status && live[u.symbol].status !== 'HEALTHY');
   return (
     <p className="xs muted row gap-6" data-live-prices>
       <Radio className="i ic-12" />
@@ -41,7 +41,10 @@ export function LivePrices({ unds }: { unds: Array<{ symbol: string; strike: num
           })
           .join(' · ')}
         . Atlas signed price, signature checked
-        {unhealthy.length ? `; Atlas rates its sources ${unhealthy[0]!.toLowerCase().replace('_', ' ')}` : ''}.
+        {unhealthy.length
+          ? `; Atlas rates its sources for ${unhealthy.map((u) => u.symbol).join(' and ')} as ${live[unhealthy[0].symbol].status!.toLowerCase().replace('_', ' ')}`
+          : ''}
+        .
       </span>
     </p>
   );
