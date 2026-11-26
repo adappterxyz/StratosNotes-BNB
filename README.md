@@ -2,7 +2,8 @@
 
 **Structured notes on Binance's stock tokens, priced by Atlas and checked by CoinMarketCap.**
 
-BNB Hack Bangkok 2026 · CoinMarketCap × Atlas challenge · **Live:** https://bnb.notes.markets
+BNB Hack Bangkok 2026 · CoinMarketCap × Atlas challenge · **Live:** https://bnb.notes.markets ·
+**[Watch the 1-minute demo](docs/video/notes-markets-bnb-demo.mp4)**
 
 ## The idea in one minute
 

@@ -61,7 +61,8 @@ rule for when the two sources disagree for long.
 - **GitHub:** https://github.com/adappterxyz/StratosNotes-BNB
 - **Finished note:** https://bnb.notes.markets/app/note/bnb-testnet:0x37184a9d436b9e8f2225cafd5474e60a5d18fdeb:3
 - **Write-up:** https://github.com/adappterxyz/StratosNotes-BNB/blob/main/docs/SUBMISSION.md
-- **Demo video:** _(add once recorded, 3 minutes max)_
+- **Demo video (52 seconds):** https://github.com/adappterxyz/StratosNotes-BNB/blob/main/docs/video/notes-markets-bnb-demo.mp4
+  (direct file: https://github.com/adappterxyz/StratosNotes-BNB/raw/main/docs/video/notes-markets-bnb-demo.mp4)
 
 ## Tech stack
 
