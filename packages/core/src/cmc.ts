@@ -53,15 +53,43 @@ export function newYorkOffset(tSec: number): -4 | -5 {
 }
 
 /**
- * Whether the US stock market's regular session is open at `tSec`: Monday to Friday, 09:30 to 16:00 New York. No
- * holiday calendar: on a holiday this says open, and the looser limit applies (the conservative error would need the
- * calendar). Plain arithmetic, no Intl: the CRE workflow's runtime has none.
+ * NYSE full-day closures and 13:00 early closes of 2026, as New York dates (nyse.com, "Holidays & Trading Hours"):
+ * New Year's Day, Martin Luther King Jr. Day, Washington's Birthday, Good Friday, Memorial Day, Juneteenth,
+ * Independence Day (observed Friday 3 July), Labor Day, Thanksgiving, Christmas; early closes the day after
+ * Thanksgiving and Christmas Eve. Other years are not listed: they fall back to plain weekdays until a year is added.
+ */
+export const US_MARKET_HOLIDAYS = [
+  '2026-01-01',
+  '2026-01-19',
+  '2026-02-16',
+  '2026-04-03',
+  '2026-05-25',
+  '2026-06-19',
+  '2026-07-03',
+  '2026-09-07',
+  '2026-11-26',
+  '2026-12-25',
+] as const;
+export const US_MARKET_EARLY_CLOSES = ['2026-11-27', '2026-12-24'] as const;
+
+/**
+ * Whether the US stock market's regular session is open at `tSec`: Monday to Friday, 09:30 to 16:00 New York (13:00
+ * on an early-close day), never on an exchange holiday of US_MARKET_HOLIDAYS. Plain arithmetic, no Intl: the CRE
+ * workflow's runtime has none.
  */
 export function usMarketOpen(tSec: number): boolean {
   const local = new Date((tSec + newYorkOffset(tSec) * 3600) * 1000);
   const day = local.getUTCDay();
+  const date = local.toISOString().slice(0, 10);
   const minutes = local.getUTCHours() * 60 + local.getUTCMinutes();
-  return day >= 1 && day <= 5 && minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+  const close = (US_MARKET_EARLY_CLOSES as readonly string[]).includes(date) ? 13 * 60 : 16 * 60;
+  return (
+    day >= 1 &&
+    day <= 5 &&
+    !(US_MARKET_HOLIDAYS as readonly string[]).includes(date) &&
+    minutes >= 9 * 60 + 30 &&
+    minutes < close
+  );
 }
 
 /** The second-source limit in force at `tSec` (market-hours aware). */

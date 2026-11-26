@@ -95,6 +95,19 @@ describe('CoinMarketCap as the second source', () => {
     expect(newYorkOffset(Date.UTC(2026, 2, 8, 7) / 1000)).toBe(-4);
     expect(newYorkOffset(Date.UTC(2026, 10, 1, 5, 59) / 1000)).toBe(-4);
     expect(newYorkOffset(Date.UTC(2026, 10, 1, 6) / 1000)).toBe(-5);
+    // Thanksgiving, Thursday 26 November 2026: closed all day, so the closed-market limit applies at midday.
+    const thanksgiving = Date.UTC(2026, 10, 26) / 1000;
+    expect(usMarketOpen(thanksgiving + 16 * 3600)).toBe(false);
+    expect(secondSourceTolerance(thanksgiving + 16 * 3600)).toBe(200);
+    // The day after: open at 14:30 UTC (09:30), closed from 18:00 UTC (13:00), not 21:00.
+    const friday = thanksgiving + 86_400;
+    expect(usMarketOpen(friday + 14 * 3600 + 30 * 60)).toBe(true);
+    expect(usMarketOpen(friday + 17 * 3600 + 59 * 60)).toBe(true);
+    expect(usMarketOpen(friday + 18 * 3600)).toBe(false);
+    // Good Friday, 3 April 2026 (EDT): closed; the Friday before and after are ordinary.
+    const goodFriday = Date.UTC(2026, 3, 3) / 1000;
+    expect(usMarketOpen(goodFriday + 16 * 3600)).toBe(false);
+    expect(usMarketOpen(goodFriday + 7 * 86_400 + 16 * 3600)).toBe(true);
     expect(secondSourceTolerance(day + 16 * 3600)).toBe(300);
     expect(secondSourceTolerance(day + 3 * 3600)).toBe(200);
     // The same 2.5% gap passes at midday and holds the check at night.

@@ -118,8 +118,8 @@ Failure handling, all tested in `packages/core/test/cmc.test.ts` and `atlas-feed
   read the real mainnet prices.
 - **A wait has no deadline when the sources disagree.** Payment dates do not move, so a long disagreement eats into
   the issuer's funding time. A production version needs a rule for what happens after a set time.
-- **No holiday calendar.** The market-hours rule knows weekdays and the 09:30 to 16:00 New York session, with
-  daylight saving, but not US holidays.
+- **Calendar for 2026 only.** The market-hours rule knows weekdays, the 09:30 to 16:00 New York session with
+  daylight saving, and the NYSE's 2026 holidays and 13:00 early closes. A later year needs its dates added.
 - **The haircut is advice.** The suggested haircut is shown to the issuer; the note's terms carry whatever the
   issuer chose, and investors see it.
 - **Short history.** The tokens listed in June 2026, so the back-test covers months, not market cycles.

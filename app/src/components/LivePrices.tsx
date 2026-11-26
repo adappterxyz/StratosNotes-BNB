@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Radio } from 'lucide-react';
+import { secondSourceTolerance, usMarketOpen } from '@sn/core';
 import { api } from '../lib/api';
 
 type Live = Record<string, { price: number; at: number; status?: string; score?: number }>;
@@ -27,6 +28,8 @@ export function LivePrices({ unds }: { unds: Array<{ symbol: string; strike: num
     };
   }, [key]);
   if (!live || !unds.some((u) => live[u.symbol])) return null;
+  const open = usMarketOpen(Math.floor(Date.now() / 1000));
+  const limit = secondSourceTolerance(Math.floor(Date.now() / 1000)) / 100;
   const unhealthy = unds.filter((u) => live[u.symbol]?.status && live[u.symbol].status !== 'HEALTHY');
   return (
     <p className="xs muted row gap-6" data-live-prices>
@@ -44,7 +47,8 @@ export function LivePrices({ unds }: { unds: Array<{ symbol: string; strike: num
         {unhealthy.length
           ? `; Atlas rates its sources for ${unhealthy.map((u) => u.symbol).join(' and ')} as ${live[unhealthy[0].symbol].status!.toLowerCase().replace('_', ' ')}`
           : ''}
-        .
+        {'. '}US stock market {open ? 'open' : 'closed'}: Atlas and CoinMarketCap must agree within {limit}% to fix a
+        price.
       </span>
     </p>
   );
