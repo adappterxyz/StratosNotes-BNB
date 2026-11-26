@@ -33,6 +33,9 @@ So the rule is: **Atlas sets the price, CoinMarketCap has to agree, and CoinMark
    every check, alongside the note's own prices.
 3. **Staleness as a control.** Atlas writes a price at least every 60 seconds. The keeper refuses one older than 15
    minutes. When Atlas's sources disagree it stops publishing; the price then ages out and the check waits.
+   On top of that, the keeper reads Atlas's own quality rating of each feed from the API: when Atlas rates its
+   sources CRITICAL or SPLIT_MARKET, the check waits. The rating is not signed, so it can only delay a check, never
+   change a price; if the API cannot be reached, the keeper goes on without it.
 
 4. **Live price between checks.** A note's page shows where each token stands against its start price right now.
    The number is Atlas's signed price: the server recovers the signer of every reply and serves it only when
@@ -96,8 +99,10 @@ applies the same rules.
   agree on, so every node reads the same price.
 - **CoinMarketCap:** one HTTP request per run for all tokens due. Nodes ask only for five-minute points at least 90
   seconds old, so they all receive the same closed points and reach identical consensus.
-- **The key** is a keeper secret (`CMC_API_KEY`, `cre/secrets.yaml`) and a Worker secret for the back-test. It is
-  never in a note, the app or this repository.
+- **Atlas's quality rating:** one request per run to Atlas's API for all stock-token feeds due, reduced to one
+  hold reason per feed, so nodes that saw slightly different scores still agree.
+- **The keys** are keeper secrets (`CMC_API_KEY`, `ATLAS_API_KEY`, `cre/secrets.yaml`) and Worker secrets for the
+  back-test, liquidity and live price. They are never in a note, the app or this repository.
 
 Failure handling, all tested in `packages/core/test/cmc.test.ts` and `atlas-feeds.test.ts`:
 
@@ -108,6 +113,8 @@ Failure handling, all tested in `packages/core/test/cmc.test.ts` and `atlas-feed
 | CoinMarketCap refuses (rate limit, bad key)    | Check waits; the log carries the error code    |
 | CoinMarketCap's newest price older than 15 min | Check waits                                    |
 | The two disagree by more than the limit        | Check waits                                    |
+| Atlas rates its sources critical or split      | Check waits                                    |
+| Atlas's API unreachable for the quality rating | Check goes on; the other controls still apply  |
 | A signed price not signed by Atlas's key       | The live price is not shown                    |
 | No API key configured                          | Stock-token checks wait; other notes unaffected |
 

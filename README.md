@@ -23,6 +23,7 @@ A note pays or fails on a handful of prices, so the product is only as good as t
 - **CoinMarketCap's BNB Chain DEX data** sizes collateral: the issue flow suggests a haircut from each token's
   liquidity and daily range, and warns when a pledge is too large to sell.
 - **Atlas's signed prices** show the live level on a note's page; the server checks Atlas's signature first.
+- **Atlas's own quality rating** is a control: when Atlas rates a feed's sources critical or split, the check waits.
 
 Without either provider a stock-token note cannot fix a price.
 
@@ -40,6 +41,7 @@ keepers, the app and Chainlink-priced notes on other chains.
 | Back-test on CoinMarketCap's daily history | `packages/core/src/products/backtest.ts`, `GET /api/market/history`, `app/src/components/Backtest.tsx` |
 | Market-hours rule for the second source | `packages/core/src/cmc.ts` (`usMarketOpen`, `secondSourceTolerance`) |
 | Liquidity-aware collateral from CoinMarketCap DEX data | `packages/core/src/products/liquidity.ts`, `GET /api/market/liquidity`, `app/src/components/issue/CollateralMarket.tsx` |
+| Atlas's quality rating holds a check (CRITICAL, SPLIT_MARKET) | `packages/core/src/atlas-signed.ts` (`atlasQualityHolds`), `cre/notes-keeper-evm/http-feeds.ts` |
 | Atlas signed prices, signature verified server-side | `packages/core/src/atlas-signed.ts`, `GET /api/market/atlas`, `app/src/components/LivePrices.tsx` |
 | Tests | `packages/core/test/atlas-feeds.test.ts`, `cmc.test.ts`, `backtest.test.ts`, `liquidity.test.ts`, `services/edge/test/api.test.ts` |
 

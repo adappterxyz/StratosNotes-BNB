@@ -29,6 +29,8 @@ SPYB and QQQB, and TSLAB, NVDAB, AAPLB, MSFTB, AMZNB, GOOGLB, METAB, COINB, MSTR
 - It values stock tokens locked as collateral.
 - Its signed price API gives a note's page the live price between checks. Our server verifies Atlas's signature on
   every reply before showing it.
+- The same API's quality rating of each feed is a control in the keeper: a check waits while Atlas rates a feed's
+  sources CRITICAL or SPLIT_MARKET. The rating is unsigned, so it can delay a check but never change a price.
 - We chose it because it prices the token itself around the clock. An oracle that follows the stock exchange stands
   still at the weekend, and a note check that falls on a Saturday would read Friday's price.
 
