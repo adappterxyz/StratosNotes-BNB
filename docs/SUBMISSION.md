@@ -4,7 +4,7 @@ CoinMarketCap × Atlas challenge, BNB Hack Bangkok, 25 to 27 November 2026.
 
 - **Demo:** https://bnb.notes.markets
 - **Repository:** https://github.com/adappterxyz/StratosNotes-BNB
-- **Team:** Notes.markets · contact: kwangwei@sol59.com
+- **Team:** Notes.markets · Kwang Wei Sim: founder and build; King: go-to-market · contact: kwangwei@sol59.com
 
 ## The problem, and who it is for
 
@@ -67,6 +67,19 @@ on 25 November with every price from Atlas, confirmed by CoinMarketCap. Start pr
 
 The notes run on testnet with stand-in tokens, because Binance's stock tokens exist on mainnet only. The prices are
 the real mainnet ones.
+
+## Verify it yourself
+
+| Open this | What it proves |
+| --- | --- |
+| [Note 3 on BNB Chain testnet](https://bnb.notes.markets/app/note/bnb-testnet:0x37184a9d436b9e8f2225cafd5474e60a5d18fdeb:3) | A stock-token note ran its whole life: start price, three checks, redemption at 1.075 per unit. Each step on the page links to its transaction. |
+| [Engine contract `0x37184A9D436B9e8F2225cAFd5474E60A5d18FDEb`](https://testnet.bscscan.com/address/0x37184A9D436B9e8F2225cAFd5474E60A5d18FDEb) | The notes are a real contract on BNB Chain testnet, and its transaction list shows the keeper's price reports and the payments. |
+| [Start-price transaction `0x7756…62bc`](https://testnet.bscscan.com/tx/0x7756815575ce099b8d049c904b4e0df307b7194bd1c06d80804b6227547362bc) | The keeper wrote note 3's start prices on-chain. The values are the TSLAB and NVDAB prices read from the Atlas Multi-Feed. |
+| [Signature-verified Atlas prices](https://bnb.notes.markets/api/market/atlas?symbols=TSLAB,NVDAB) | The server calls Atlas's signed price API live and serves a price only when Atlas's reporter key signed it (`"verified": true`, with the signer's address and Atlas's quality status). |
+
+What these do not show: the CoinMarketCap calls themselves. Those happen inside the keeper, off-chain, and leave no
+on-chain record; a price reaching the contract means the check passed, but the evidence for the check is the code
+(`packages/core/src/cmc.ts`, `cre/notes-keeper-evm`) and its tests, not these links.
 
 ## New work and prior work
 
