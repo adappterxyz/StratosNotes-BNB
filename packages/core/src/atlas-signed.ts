@@ -93,3 +93,34 @@ export function decodeAtlasSigned(body: string): AtlasSignedReport {
   }
   return { payload: payload as `0x${string}`, signature: signature as `0x${string}`, prices };
 }
+
+/**
+ * Atlas's consensus statuses at which a note's price is not written: its sources split (SPLIT_MARKET) or agree too
+ * little to trust (CRITICAL: Atlas itself then publishes only its last trusted value and halts). DEGRADED and WARNING
+ * are shown to people but do not stop a check: the other thinner-market guards (the second source, the median, the
+ * disruption rule) carry those.
+ */
+export const ATLAS_HOLD_STATUSES = ['CRITICAL', 'SPLIT_MARKET'] as const;
+
+/**
+ * For each of `feedIds`, why Atlas's own quality reading holds its price ('' when nothing does). Read from the same
+ * reply as a signed price, but the quality reading is NOT part of the signed payload: it can only make a check wait,
+ * never change a price. Throws when the reply is not Atlas's; the caller then goes on without this control (the
+ * on-chain feed and CoinMarketCap still have to agree).
+ */
+export function atlasQualityHolds(body: string, feedIds: readonly number[]): string[] {
+  let parsed: { data?: { consensusScores?: Array<{ feedId?: unknown; consensusStatus?: unknown }> } };
+  try {
+    parsed = JSON.parse(body) as typeof parsed;
+  } catch {
+    throw new Error('Atlas: reply is not JSON');
+  }
+  const scores = parsed?.data?.consensusScores;
+  if (!Array.isArray(scores)) throw new Error('Atlas: no quality reading in the reply');
+  return feedIds.map((id) => {
+    const status = scores.find((q) => Number(q?.feedId) === id)?.consensusStatus;
+    return typeof status === 'string' && (ATLAS_HOLD_STATUSES as readonly string[]).includes(status)
+      ? `Atlas rates its sources ${status.toLowerCase().replace('_', ' ')}`
+      : '';
+  });
+}

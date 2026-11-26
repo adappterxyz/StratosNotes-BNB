@@ -10,7 +10,12 @@
  * rule: `lagBlocks` below the head, since its public RPC does not keep the finalized block's state.
  */
 import {
+  ATLAS_API,
+  ATLAS_KEY_HEADER,
+  ATLAS_PRICE_PATH,
+  atlasQualityHolds,
   atlasReading,
+  atlasSignedBody,
   checkRound,
   CMC_API,
   CMC_KEY_HEADER,
@@ -62,7 +67,9 @@ export interface FallbackConfig {
   feedRoutes?: FeedRoutes;
   /** CoinMarketCap Pro API key: the second source of Atlas prices (never logged). Without it they wait. */
   cmcApiKey?: string;
-  /** For tests: the fetch used for CoinMarketCap. */
+  /** Atlas API key: its own quality reading of a feed is a control on its price (never logged). Without it, none. */
+  atlasApiKey?: string;
+  /** For tests: the fetch used for CoinMarketCap and Atlas. */
   fetch?: typeof fetch;
   log: (line: string) => void;
 }
@@ -201,6 +208,22 @@ export async function readFeed(
     const points = roundPoints(h.rounds);
     const hold = secondSourceHold(r.round.answer, points, nowSec);
     if (hold) throw new Error(`${f.field}: ${hold}`);
+    if (cfg.atlasApiKey) {
+      // As the CRE keeper: Atlas's own quality reading can hold the price; an unreachable one is skipped.
+      try {
+        const res = await (cfg.fetch ?? fetch)(ATLAS_API + ATLAS_PRICE_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', [ATLAS_KEY_HEADER]: cfg.atlasApiKey },
+          body: atlasSignedBody([ref.atlasId]),
+          signal: AbortSignal.timeout(10_000),
+        });
+        const quality = atlasQualityHolds(await res.text(), [ref.atlasId])[0];
+        if (quality) throw new Error(`${f.field}: ${quality}`);
+      } catch (e) {
+        if ((e as Error).message.startsWith(`${f.field}:`)) throw e;
+        cfg.log(`${f.field}: Atlas quality reading skipped`);
+      }
+    }
     return history ? { points, decimals: r.decimals } : price;
   }
   const [roundId, answer, , updatedAt, answeredInRound] = await client.readContract({

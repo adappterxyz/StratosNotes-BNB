@@ -64,11 +64,18 @@ import {
 } from '../../packages/core/src/crosschain';
 import type { WorkflowDef } from '../../packages/core/src/def-types';
 import { CMC_STEP, secondSourceHold } from '../../packages/core/src/cmc';
-import { EVM_FEED_CHAINS, HISTORY_FEED_CHAINS, isAtlasFeed, readingToRound } from '../../packages/core/src/feed-rpc';
+import {
+  EVM_FEED_CHAINS,
+  HISTORY_FEED_CHAINS,
+  isAtlasFeed,
+  parseFeedRef,
+  readingToRound,
+} from '../../packages/core/src/feed-rpc';
 import { ATLAS_DECIMALS, cmcIdOfFeed } from '../../packages/core/src/products/atlas-feeds';
 import { feedAbi, lensAbi } from '../../packages/sdk/src/evm/abi';
 import { hexToBytes, snapshotToState } from '../../packages/sdk/src/evm/state';
 import {
+  atlasHolds,
   cmcHistories,
   httpFeedChainsSchema,
   httpFeedReadings,
@@ -375,6 +382,21 @@ export const onCron = (runtime: Runtime<Config>): string => {
     }
   }
   const cmc = cmcHistories(runtime, cmcKey, cmcWanted, cmcFrom, nowSec);
+  // Atlas's own quality reading of the same feeds (its sources split, or too little agreement): a hold, never a price.
+  let atlasKey: string | undefined;
+  const atlasIds = [
+    ...new Set(
+      work.flatMap((w) => w.feeds).flatMap((f) => (isAtlasFeed(f.feed) ? [parseFeedRef(f.feed).atlasId!] : [])),
+    ),
+  ];
+  if (atlasIds.length) {
+    try {
+      atlasKey = runtime.getSecret({ id: 'ATLAS_API_KEY' }).result().value || undefined;
+    } catch {
+      atlasKey = undefined;
+    }
+  }
+  const atlasHold = atlasHolds(runtime, atlasKey, atlasIds);
   for (const [k, h] of cmc) histories.set(k, h);
   // A basket reads one feed per underlying; read each feed at most once per run, whatever needs it.
   const prices = new Map<string, bigint>();
@@ -408,6 +430,8 @@ export const onCron = (runtime: Runtime<Config>): string => {
         if ('error' in h) throw new Error(`${f.field}: ${h.error}`);
         const hold = secondSourceHold(round.answer, h, nowSec);
         if (hold) throw new Error(`${f.field}: ${hold}`);
+        const quality = atlasHold.get(parseFeedRef(f.feed).atlasId!);
+        if (quality) throw new Error(`${f.field}: ${quality}`);
       }
       if (f.window && fix === undefined) throw new Error(`${f.field}: no fixing for its window`);
       prices.set(k, fix === undefined ? latest : feedToFixed(fix, decimals));

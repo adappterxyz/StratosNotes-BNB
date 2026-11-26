@@ -8,6 +8,7 @@ import {
   COLLATERAL_SYMBOLS,
   deliverableToken,
   atlasFetchData,
+  atlasQualityHolds,
   atlasSignedBody,
   decodeAtlasSigned,
   BSC_MAINNET_FEED_CHAIN,
@@ -133,5 +134,29 @@ describe('Atlas signed prices', () => {
     expect(() => decodeAtlasSigned(JSON.stringify({ data: {} }))).toThrow(/no signed payload/);
     expect(() => decodeAtlasSigned(body({ payload: payload.slice(0, -2) + '03' }))).toThrow(/does not match its count/);
     expect(() => decodeAtlasSigned(body({ signature: '0x1234' }))).toThrow(/65 bytes/);
+  });
+});
+
+describe("Atlas's own quality reading as a control", () => {
+  const reply = (scores: object[]) =>
+    JSON.stringify({ data: { payload: '0x', signature: '0x', consensusScores: scores } });
+  it('holds a price only when Atlas rates its sources critical or split', () => {
+    const body = reply([
+      { feedId: '933', consensusScore: 0.95, consensusStatus: 'HEALTHY' },
+      { feedId: '934', consensusScore: 0.7, consensusStatus: 'DEGRADED' },
+      { feedId: '956', consensusScore: 0.3, consensusStatus: 'CRITICAL' },
+      { feedId: '947', consensusScore: 0.5, consensusStatus: 'SPLIT_MARKET' },
+    ]);
+    expect(atlasQualityHolds(body, [933, 934, 956, 947, 999])).toEqual([
+      '',
+      '',
+      'Atlas rates its sources critical',
+      'Atlas rates its sources split market',
+      '',
+    ]);
+  });
+  it('is not a reply to go on: a refused or malformed one throws, for the caller to go without', () => {
+    expect(() => atlasQualityHolds('nope', [933])).toThrow(/not JSON/);
+    expect(() => atlasQualityHolds(JSON.stringify({ data: {} }), [933])).toThrow(/no quality reading/);
   });
 });

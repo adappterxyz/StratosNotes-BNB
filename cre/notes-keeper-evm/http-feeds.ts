@@ -32,6 +32,13 @@ import {
   type RoundHistoryRequest,
   type TokenReading,
 } from '../../packages/core/src/feed-rpc';
+import {
+  ATLAS_API,
+  ATLAS_KEY_HEADER,
+  ATLAS_PRICE_PATH,
+  atlasQualityHolds,
+  atlasSignedBody,
+} from '../../packages/core/src/atlas-signed';
 import { CMC_API, CMC_KEY_HEADER, cmcHistoryPath, decodeCmcHistory } from '../../packages/core/src/cmc';
 import type { FeedRef, PricePoint } from '../../packages/core/src/keeper';
 import { isRhMultiplierRef, rhTokenOfFeed } from '../../packages/core/src/products/robinhood-tokens';
@@ -326,6 +333,59 @@ export function cmcHistories(
       const h = got[ids.indexOf(w.cmcId)] ?? { error: 'CoinMarketCap: no reading' };
       out.set(w.key, 'error' in h ? h : roundPoints(h.rounds));
     }
+  }
+  return out;
+}
+
+/**
+ * Runs on every node: Atlas's quality reading of some feeds, reduced to one hold reason per feed ('' = none), so
+ * nodes that saw slightly different scores still agree (aggregated as identical).
+ */
+export const atlasQuality = (s: HTTPSendRequester, req: { key: string; ids: number[] }): string => {
+  try {
+    const r = s
+      .sendRequest({
+        url: ATLAS_API + ATLAS_PRICE_PATH,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', [ATLAS_KEY_HEADER]: req.key },
+        body: bytesToBase64(new TextEncoder().encode(atlasSignedBody(req.ids))),
+        timeout: '10s',
+      })
+      .result();
+    return JSON.stringify({ holds: atlasQualityHolds(text(r), req.ids) });
+  } catch {
+    return JSON.stringify({ error: 'Atlas: no quality reading' });
+  }
+};
+
+/**
+ * Why Atlas's own quality reading holds each feed in `ids` (a hold reason, by feed id; feeds with none are absent).
+ * ONE request per run. Without a key, or when Atlas does not answer or the nodes disagree, the control is skipped
+ * and logged: the on-chain price still has to agree with CoinMarketCap, and an unreachable quality service must not
+ * stop every note.
+ */
+export function atlasHolds(runtime: Runtime<unknown>, apiKey: string | undefined, ids: number[]): Map<number, string> {
+  const out = new Map<number, string>();
+  if (!ids.length) return out;
+  if (!apiKey) {
+    runtime.log('Atlas quality reading skipped: no API key (keeper secret ATLAS_API_KEY)');
+    return out;
+  }
+  try {
+    const r = JSON.parse(
+      new HTTPClient()
+        .sendRequest(
+          runtime,
+          atlasQuality,
+          consensusIdenticalAggregation<string>(),
+        )({ key: apiKey, ids })
+        .result(),
+    ) as { holds?: string[]; error?: string };
+    if (!r.holds) throw new Error(r.error ?? 'no reading');
+    r.holds.forEach((h, i) => h && out.set(ids[i], h));
+    runtime.log(`Atlas quality reading of ${ids.length} feed(s): ${out.size} held`);
+  } catch (e) {
+    runtime.log(`Atlas quality reading skipped: ${(e as Error).message}`);
   }
   return out;
 }

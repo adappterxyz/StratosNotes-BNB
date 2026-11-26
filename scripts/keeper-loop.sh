@@ -20,6 +20,8 @@ while true; do
   python3 -c "import json;k=json.load(open('$ROOT/.keys/keeper.json'))[0]['private_key'];print('CRE_ETH_PRIVATE_KEY='+(k[2:] if k.startswith('0x') else k))" > "$ENVF"
   # The CoinMarketCap key (second source of Atlas prices): the workflow secret CMC_API_KEY (cre/secrets.yaml).
   [ -f "$ROOT/.keys/cmc.json" ] && python3 -c "import json;print('CMC_API_KEY_ALL='+json.load(open('$ROOT/.keys/cmc.json'))['apiKey'])" >> "$ENVF"
+  # Atlas's key: its own quality reading of each feed is a control on the price (workflow secret ATLAS_API_KEY).
+  [ -f "$ROOT/.keys/atlas.json" ] && python3 -c "import json;print('ATLAS_API_KEY_ALL='+json.load(open('$ROOT/.keys/atlas.json'))['apiKey'])" >> "$ENVF"
   timeout 300 cre workflow simulate ./notes-keeper-evm --target "${TARGET:-staging-settings}" --trigger-index 0 --non-interactive --broadcast -e "$ENVF" 2>&1 \
     | grep -E "USER LOG|\"\{|✗|rror" || echo "(no output)"
   rm -f "$ENVF"
