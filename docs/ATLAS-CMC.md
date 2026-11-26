@@ -131,3 +131,50 @@ Failure handling, all tested in `packages/core/test/cmc.test.ts` and `atlas-feed
   issuer chose, and investors see it.
 - **Short history.** The tokens listed in June 2026, so the back-test covers months, not market cycles.
 - **Free CoinMarketCap plan.** 15,000 credits a month covers this: a keeper run with a check due costs 1 credit.
+
+## Code map: what was built at the hackathon
+
+Everything after the git tag `pre-hackathon` (`git log pre-hackathon..main`). Before it: the note engine, the
+keepers, the app and Chainlink-priced notes on other chains.
+
+| Built at the hackathon | Where |
+|---|---|
+| Atlas Multi-Feed reads (`fetch(bytes4)`), pinned to one block for every keeper node | `packages/core/src/feed-rpc.ts`, `products/atlas-feeds.ts` |
+| Stock tokens as underlyings and as collateral, priced per token | `packages/core/src/products/params.ts` |
+| CoinMarketCap second-source check and five-minute history | `packages/core/src/cmc.ts` |
+| Both in the Chainlink CRE keeper and the fallback keeper | `cre/notes-keeper-evm`, `services/keeper-fallback` |
+| Back-test on CoinMarketCap's daily history | `packages/core/src/products/backtest.ts`, `GET /api/market/history`, `app/src/components/Backtest.tsx` |
+| Market-hours rule for the second source | `packages/core/src/cmc.ts` (`usMarketOpen`, `secondSourceTolerance`) |
+| Liquidity-aware collateral from CoinMarketCap DEX data | `packages/core/src/products/liquidity.ts`, `GET /api/market/liquidity`, `app/src/components/issue/CollateralMarket.tsx` |
+| Atlas's quality rating holds a check (CRITICAL, SPLIT_MARKET) | `packages/core/src/atlas-signed.ts` (`atlasQualityHolds`), `cre/notes-keeper-evm/http-feeds.ts` |
+| Atlas signed prices, signature verified server-side | `packages/core/src/atlas-signed.ts`, `GET /api/market/atlas`, `app/src/components/LivePrices.tsx` |
+| Tests | `packages/core/test/atlas-feeds.test.ts`, `cmc.test.ts`, `backtest.test.ts`, `liquidity.test.ts`, `services/edge/test/api.test.ts` |
+
+## Run it
+
+Needs Node 20+, and for the keeper [Bun](https://bun.sh) and the [Chainlink CRE CLI](https://docs.chain.link/cre).
+
+```bash
+npm install
+npm run typecheck && npm test          # all unit tests, no keys needed
+
+# Keys (never committed: .keys/ is ignored)
+mkdir -p .keys
+echo '{"apiKey":"<your CoinMarketCap Pro API key>"}' > .keys/cmc.json
+
+# Issue a demo note on stock tokens on BNB Chain testnet (needs funded testnet wallets in .keys/, see docs/DEPLOY.md)
+CHAIN=bnb-testnet NOTE=bstock FIXING_WINDOW=15 DISRUPTION=5 STRIKE_IN=420 OBS_EVERY=600 npx tsx scripts/seed-note.ts
+
+# Run the keeper for BNB Chain: reads Atlas and CoinMarketCap, writes the prices to the note
+npx tsx scripts/cre-config.ts bnb
+TARGET=bnb-settings bash scripts/keeper-loop.sh
+
+# The site (landing page, app and API in one Cloudflare Worker)
+npm run build:web
+cd web && printf 'CMC_API_KEY=<your key>\nATLAS_API_KEY=<your Atlas key, optional: live prices>\n' > .dev.vars && wrangler dev
+```
+
+API keys stay on the server: the keeper reads its key as a workflow secret (`cre/secrets.yaml`), the site as a
+Worker secret. Neither is in the app bundle or this repository.
+
+Testnet only; the contracts are not audited.
