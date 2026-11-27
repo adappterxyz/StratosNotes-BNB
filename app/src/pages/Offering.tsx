@@ -113,7 +113,7 @@ export default function OfferingPage() {
       toast({
         tone: 'party',
         title: 'Repaid early',
-        body: `Chainlink's check came in above the early-repayment line: holders get their money back with ${fmtMoney(paid, 4)} ${sym0} per unit in all.`,
+        body: `The check came in above the early-repayment line: holders get their money back with ${fmtMoney(paid, 4)} ${sym0} per unit in all.`,
       });
     else if (paid > was.paid + 1e-9)
       toast({
@@ -366,7 +366,7 @@ export default function OfferingPage() {
                 past={finished}
                 note={
                   o.phase === 'book'
-                    ? 'The lines are set against the starting price, which Chainlink fixes when the book closes.'
+                    ? `The lines are set against the starting price, which ${o.params.underlyings?.some((u) => isAtlasFeed(u.feed)) ? 'Atlas' : 'Chainlink'} fixes when the book closes.`
                     : undefined
                 }
               />
@@ -935,7 +935,7 @@ function Timeline({ o, sym, now }: { o: NoteView; sym: string; now: number }) {
               : 'Not observed'
           : perf === undefined && o.phase === 'live' && k === o.perfs.length
             ? now >= t
-              ? 'Due: waiting for Chainlink'
+              ? `Due: waiting for ${o.params.underlyings?.some((u) => isAtlasFeed(u.feed)) ? 'Atlas and CoinMarketCap to agree' : 'Chainlink'}`
               : `In ${countdown(t, now)}`
             : undefined,
         pay,
